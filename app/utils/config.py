@@ -5,17 +5,17 @@ class Settings(BaseSettings):
     APP_NAME: str = 'FastAPI App'
 
     # JWT settings
-    SECRET_KEY: str
+    SECRET_KEY: str = 'your_secret_key'
     ALGORITHM: str = 'HS256'
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # User settings
-    USER_USERNAME: str
-    USER_PASSWORD: str
+    USER_USERNAME: str = 'default_user'
+    USER_PASSWORD: str = 'default_password'
 
     # Admin settings
-    ADMIN_USERNAME: str
-    ADMIN_PASSWORD: str
+    ADMIN_USERNAME: str = 'admin_user'
+    ADMIN_PASSWORD: str = 'admin_password'
 
     class Config:
         env_file = 'settings.env'

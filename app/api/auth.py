@@ -3,8 +3,8 @@ from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 from pydantic import BaseModel
 
-from app.core.config import settings
-from app.core.security import verify_password, create_access_token
+from app.utils.config import settings
+from app.utils.security import verify_password, create_access_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
