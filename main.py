@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 import uvicorn
-from core.config import settings
-from api.auth import router as auth_router
-from api.admin import router as admin_router
+from app.core.config import settings
+from app.api.auth import router as auth_router
+from app.api.admin import router as admin_router
 
 # You can import other routers (e.g., admin, user) as they get implemented
 
