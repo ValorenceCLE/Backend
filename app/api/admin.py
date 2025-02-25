@@ -1,47 +1,42 @@
-from fastapi import APIRouter, HTTPException
-from pathlib import Path
-import json
+from fastapi import Request, APIRouter, HTTPException, Depends
+from app.utils.dependencies import require_role
 
-router = APIRouter(prefix="/api", tags=["Public Configuration"])
 
-# Define the path to your configuration file.
-# Adjust the path if needed.
-CONFIG_PATH = Path(__file__).parent.parent / "config" / "config.json"
-
-def load_config():
-    """Reads and returns the JSON configuration file."""
+router = APIRouter(prefix="/admin", tags=["Admin APi Configuration"])
+    
+@router.get("/", summary="Retrieve custom configuration")
+async def get_custom_config(request: Request):
     try:
-        with open(CONFIG_PATH, "r") as f:
-            return json.load(f)
+        return request.app.state.config
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reading config file: {e}")
-
-@router.get("/general", summary="Retrieve general configuration")
-def get_general():
-    config = load_config()
-    return config.get("general", {})
-
-@router.get("/network", summary="Retrieve network configuration")
-def get_network():
-    config = load_config()
-    return config.get("network", {})
-
-@router.get("/date_time", summary="Retrieve date and time configuration")
-def get_date_time():
-    config = load_config()
-    return config.get("date_time", {})
-
-@router.get("/email", summary="Retrieve email configuration")
-def get_email():
-    config = load_config()
-    return config.get("email", {})
-
-@router.get("/relays", summary="Retrieve relays configuration")
-def get_relays():
-    config = load_config()
-    return config.get("relays", {})
-
-@router.get("/tasks", summary="Retrieve tasks configuration")
-def get_tasks():
-    config = load_config()
-    return config.get("tasks", {})
+        raise HTTPException(status_code=500, detail=f"Error reading custom config file: {e}")
+    
+@router.get("/{config_section}", summary="Retrieve specific configuration section", dependencies=[Depends(require_role("admin"))])
+async def get_config_section(request: Request, config_section: str):
+    try:
+        print(request.app.state.config[config_section])
+        return request.app.state.config[config_section]
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Configuration section '{config_section}' not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading custom config file: {e}")
+    
+@router.post("/", summary="Update custom configuration")
+async def update_custom_config(request: Request, new_config: dict):
+    try:
+        request.app.state.config = new_config
+        print("New Config:", request.app.state.config)
+        return {"message": "Configuration updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating custom config file: {e}")
+    
+@router.post("/{config_section}", summary="Update specific configuration section")
+async def update_config_section(request: Request, config_section: str, new_config: dict):
+    try:
+        if config_section in request.app.state.config:
+            request.app.state.config[config_section] = new_config
+            return {"message": f"Configuration section '{config_section}' updated successfully"}
+        else:
+            raise HTTPException(status_code=404, detail=f"Configuration section '{config_section}' not found")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating custom config file: {e}")

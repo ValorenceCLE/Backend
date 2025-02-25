@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
 import aiofiles
@@ -8,7 +10,6 @@ import json
 from app.utils.config import settings
 from app.api.auth import router as auth_router
 from app.api.admin import router as admin_router
-from app.api.update import router as update_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,9 +24,25 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
+# ✅ CORS MIDDLEWARE HERE (before router includes)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Vue frontend (Vite default port)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"message": exc.detail}
+    )
+
 app.include_router(auth_router)
 app.include_router(admin_router)
-app.include_router(update_router)
+
 
 @app.get("/")
 def read_root():

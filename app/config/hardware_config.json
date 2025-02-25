@@ -1,53 +1,60 @@
 {
     "relays": {
         "1": {
-            "id": "relay1",
+            "id": "relay_1",
             "pin": 22,
             "address": "0x46",
-            "on": "LOW",
-            "off": "HIGH"
+            "mode": "BCM",
+            "setup": "OUT",
+            "normallyOpen": true
         },
         "2": {
-            "id": "relay2",
+            "id": "relay_2",
             "pin": 27,
             "address": "0x47",
-            "on": "LOW",
-            "off": "HIGH"
+            "mode": "BCM",
+            "setup": "OUT",
+            "normallyOpen": true
         },
         "3": {
-            "id": "relay3",
+            "id": "relay_3",
             "pin": 17,
             "address": "0x48",
-            "on": "HIGH",
-            "off": "LOW"
+            "mode": "BCM",
+            "setup": "OUT",
+            "normallyOpen": false
         },
         "4": {
-            "id": "relay4",
+            "id": "relay_4",
             "pin": 4,
             "address": "0x49",
-            "on": "HIGH",
-            "off": "LOW"
+            "mode": "BCM",
+            "setup": "OUT",
+            "normallyOpen": false
         },
         "5": {
-            "id": "relay5",
+            "id": "relay_5",
             "pin": 24,
             "address": "0x4A",
-            "on": "HIGH",
-            "off": "LOW"
+            "mode": "BCM",
+            "setup": "OUT",
+            "normallyOpen": false
         },
         "6": {
-            "id": "relay6",
+            "id": "relay_6",
             "pin": 23,
             "address": "0x4B",
-            "on": "HIGH",
-            "off": "LOW"
+            "mode": "BCM",
+            "setup": "OUT",
+            "normallyOpen": false
         },
         "7": {
             "id": "main",
             "pin": 12,
             "address": "0x4C",
-            "on": "HIGH",
-            "off": "LOW"
+            "mode": "BCM",
+            "setup": "OUT",
+            "normallyOpen": false
         }
     }
 }
