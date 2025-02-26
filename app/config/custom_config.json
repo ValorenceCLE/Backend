@@ -1,36 +1,39 @@
 {
     "general": {
         "name": "R&D Test System",
-        "systemId": "10000000bb6b64b8",
+        "system_id": "10000000bb6b64b8",
         "version": "1.0.0",
         "agency": "Valorence",
         "product": "DPM",
-        "rebootTime": "04:00"
+        "reboot_time": "04:00"
     },
     "network": {
-        "ipAddress": "192.168.1.2",
-        "subnetMask": "255.255.255.0",
+        "ip_address": "192.168.1.2",
+        "subnet_mask": "255.255.255.0",
         "gateway": "192.168.1.1",
         "dhcp": true,
-        "primaryDns": "192.168.1.1",
-        "secondaryDns": "8.8.8.8",
-        "httpsPort": 443
+        "primary_dns": "192.168.1.1",
+        "secondary_dns": "8.8.8.8",
+        "https_port": 443
     },
-    "dateTime": {
-        "primaryNtp": "ntp.axis.com",
-        "secondaryNtp": "time.google.com",
+    "date_time": {
+        "primary_ntp": "ntp.axis.com",
+        "secondary_ntp": "time.google.com",
         "synchronize": true,
         "timezone": "America/Denver",
-        "utcOffset": -7
+        "utc_offset": -7
     },
     "email": {
-        "smtpServer": "smtp.gmail.com",
-        "smtpPort": 587,
-        "smtpUser": "example user",
-        "smtpPassword": "example password",
-        "smtpSecure": "tls",
-        "returnEmail": "example email",
-        "emails": ["example email", "example email"]
+        "smtp_server": "smtp.gmail.com",
+        "smtp_port": 587,
+        "smtp_user": "example user",
+        "smtp_password": "example password",
+        "smtp_secure": "tls",
+        "return_email": "example email",
+        "emails": [
+            "example email",
+            "example email"
+        ]
     },
     "relays": {
         "1": {
@@ -38,31 +41,31 @@
             "name": "Router",
             "enabled": true,
             "state": "on",
-            "bootState": "on",
-            "pulseTime": 5,
+            "boot_state": "on",
+            "pulse_time": 5,
             "schedule": {
                 "enabled": true,
-                "onTime": "00:00",
-                "offTime": "23:59"
+                "on_time": "00:00",
+                "off_time": "23:59"
             },
             "dashboard": {
-                "onButton": {
+                "on_button": {
                     "show": false,
-                    "statusText": "On",
-                    "statusColor": "green",
-                    "buttonLabel": "On"
+                    "status_text": "ON",
+                    "status_color": "green",
+                    "button_label": "On"
                 },
-                "offButton": {
+                "off_button": {
                     "show": false,
-                    "statusText": "Off",
-                    "statusColor": "red",
-                    "buttonLabel": "Off"
+                    "status_text": "OFF",
+                    "status_color": "red",
+                    "button_label": "Off"
                 },
-                "pulseButton": {
+                "pulse_button": {
                     "show": true,
-                    "statusText": "Restarting...",
-                    "statusColor": "yellow",
-                    "buttonLabel": "Restart"
+                    "status_text": "Restarting...",
+                    "status_color": "yellow",
+                    "button_label": "Restart"
                 }
             }
         },
@@ -71,31 +74,31 @@
             "name": "Camera",
             "enabled": true,
             "state": "on",
-            "bootState": "on",
-            "pulseTime": 5,
+            "boot_state": "on",
+            "pulse_time": 5,
             "schedule": {
                 "enabled": true,
-                "onTime": "00:00",
-                "offTime": "23:59"
+                "on_time": "00:00",
+                "off_time": "23:59"
             },
             "dashboard": {
-                "onButton": {
+                "on_button": {
                     "show": true,
-                    "statusText": "On",
-                    "statusColor": "green",
-                    "buttonLabel": "On"
+                    "status_text": "ON",
+                    "status_color": "green",
+                    "button_label": "On"
                 },
-                "offButton": {
+                "off_button": {
                     "show": true,
-                    "statusText": "Off",
-                    "statusColor": "red",
-                    "buttonLabel": "Off"
+                    "status_text": "OFF",
+                    "status_color": "red",
+                    "button_label": "Off"
                 },
-                "pulseButton": {
+                "pulse_button": {
                     "show": true,
-                    "statusText": "Restarting...",
-                    "statusColor": "yellow",
-                    "buttonLabel": "Restart"
+                    "status_text": "Restarting...",
+                    "status_color": "yellow",
+                    "button_label": "Restart"
                 }
             }
         },
@@ -104,31 +107,31 @@
             "name": "Fan",
             "enabled": true,
             "state": "on",
-            "bootState": "on",
-            "pulseTime": 5,
+            "boot_state": "on",
+            "pulse_time": 5,
             "schedule": {
                 "enabled": true,
-                "onTime": "04:59",
-                "offTime": "18:00"
+                "on_time": "04:59",
+                "off_time": "18:00"
             },
             "dashboard": {
-                "onButton": {
-                    "show": false,
-                    "statusText": "Running",
-                    "statusColor": "green",
-                    "buttonLabel": "Running"
-                },
-                "offButton": {
-                    "show": false,
-                    "statusText": "Off",
-                    "statusColor": "red",
-                    "buttonLabel": "Off"
-                },
-                "pulseButton": {
+                "on_button": {
                     "show": true,
-                    "statusText": "Restarting...",
-                    "statusColor": "yellow",
-                    "buttonLabel": "Restart"
+                    "status_text": "ON",
+                    "status_color": "green",
+                    "button_label": "On"
+                },
+                "off_button": {
+                    "show": true,
+                    "status_text": "OFF",
+                    "status_color": "red",
+                    "button_label": "Off"
+                },
+                "pulse_button": {
+                    "show": true,
+                    "status_text": "Running...",
+                    "status_color": "yellow",
+                    "button_label": "Run 5 Min."
                 }
             }
         },
@@ -137,31 +140,31 @@
             "name": "IR Light",
             "enabled": true,
             "state": "on",
-            "bootState": "on",
-            "pulseTime": 5,
+            "boot_state": "on",
+            "pulse_time": 5,
             "schedule": {
                 "enabled": true,
-                "onTime": "18:00",
-                "offTime": "04:59"
+                "on_time": "18:00",
+                "off_time": "04:59"
             },
             "dashboard": {
-                "onButton": {
-                    "show": false,
-                    "statusText": "On",
-                    "statusColor": "green",
-                    "buttonLabel": "On"
-                },
-                "offButton": {
-                    "show": false,
-                    "statusText": "Off",
-                    "statusColor": "red",
-                    "buttonLabel": "Off"
-                },
-                "pulseButton": {
+                "on_button": {
                     "show": true,
-                    "statusText": "Restarting...",
-                    "statusColor": "yellow",
-                    "buttonLabel": "Restart"
+                    "status_text": "ON",
+                    "status_color": "red",
+                    "button_label": "On"
+                },
+                "off_button": {
+                    "show": true,
+                    "status_text": "OFF",
+                    "status_color": "green",
+                    "button_label": "Off"
+                },
+                "pulse_button": {
+                    "show": false,
+                    "status_text": "Restarting...",
+                    "status_color": "yellow",
+                    "button_label": "Restart"
                 }
             }
         },
@@ -170,60 +173,62 @@
             "name": "Strobe Light",
             "enabled": true,
             "state": "on",
-            "bootState": "on",
-            "pulseTime": 5,
+            "boot_state": "on",
+            "pulse_time": 5,
             "schedule": {
                 "enabled": true,
-                "onTime": "18:00",
-                "offTime": "04:59"
+                "on_time": "18:00",
+                "off_time": "04:59"
             },
             "dashboard": {
-                "onButton": {
-                    "show": false,
-                    "statusText": "On",
-                    "statusColor": "green",
-                    "buttonLabel": "On"
-                },
-                "offButton": {
-                    "show": false,
-                    "statusText": "Off",
-                    "statusColor": "red",
-                    "buttonLabel": "Off"
-                },
-                "pulseButton": {
+                "on_button": {
                     "show": true,
-                    "statusText": "Restarting...",
-                    "statusColor": "yellow",
-                    "buttonLabel": "Restart"
+                    "status_text": "ON",
+                    "status_color": "red",
+                    "button_label": "On"
+                },
+                "off_button": {
+                    "show": true,
+                    "status_text": "OFF",
+                    "status_color": "green",
+                    "button_label": "Off"
+                },
+                "pulse_button": {
+                    "show": true,
+                    "status_text": "ON",
+                    "status_color": "blue",
+                    "button_label": "Run 5 Min."
                 }
             }
         },
         "6": {
             "id": "relay_6",
             "name": "Aux 1",
-            "enabled": true,
+            "enabled": false,
             "state": "on",
-            "bootState": "on",
-            "pulseTime": 5,
-            "schedule": {"enabled": false},
+            "boot_state": "on",
+            "pulse_time": 5,
+            "schedule": {
+                "enabled": false
+            },
             "dashboard": {
-                "onButton": {
-                    "show": false,
-                    "statusText": "On",
-                    "statusColor": "green",
-                    "buttonLabel": "On"
-                },
-                "offButton": {
-                    "show": false,
-                    "statusText": "Off",
-                    "statusColor": "red",
-                    "buttonLabel": "Off"
-                },
-                "pulseButton": {
+                "on_button": {
                     "show": true,
-                    "statusText": "Restarting...",
-                    "statusColor": "yellow",
-                    "buttonLabel": "Restart"
+                    "status_text": "On",
+                    "status_color": "green",
+                    "button_label": "On"
+                },
+                "off_button": {
+                    "show": true,
+                    "status_text": "Off",
+                    "status_color": "red",
+                    "button_label": "Off"
+                },
+                "pulse_button": {
+                    "show": false,
+                    "status_text": "Restarting...",
+                    "status_color": "yellow",
+                    "button_label": "Restart"
                 }
             }
         }
@@ -236,8 +241,15 @@
             "operator": ">",
             "value": 5,
             "actions": [
-                {"type": "io", "target": "relay1", "state": "on"},
-                {"type": "email", "message": "Test message"}
+                {
+                    "type": "io",
+                    "target": "relay1",
+                    "state": "on"
+                },
+                {
+                    "type": "email",
+                    "message": "Test message"
+                }
             ]
         },
         "2": {
@@ -247,8 +259,15 @@
             "operator": "<",
             "value": 5,
             "actions": [
-                {"type": "io", "target": "relay2", "state": "off"},
-                {"type": "email", "message": "Test message 2"}
+                {
+                    "type": "io",
+                    "target": "relay2",
+                    "state": "off"
+                },
+                {
+                    "type": "email",
+                    "message": "Test message 2"
+                }
             ]
         }
     }

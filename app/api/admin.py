@@ -2,14 +2,21 @@ from fastapi import Request, APIRouter, HTTPException, Depends
 from app.utils.dependencies import require_role
 
 
-router = APIRouter(prefix="/admin", tags=["Admin APi Configuration"])
-    
+router = APIRouter(prefix="/config", tags=["Admin APi Configuration"])
+
 @router.get("/", summary="Retrieve custom configuration")
 async def get_custom_config(request: Request):
     try:
         return request.app.state.config
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading custom config file: {e}")
+    
+# @router.get("/", summary="Retrieve custom configuration", dependencies=[Depends(require_role("admin"))])
+# async def get_custom_config(request: Request):
+#     try:
+#         return request.app.state.config
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error reading custom config file: {e}")
     
 @router.get("/{config_section}", summary="Retrieve specific configuration section", dependencies=[Depends(require_role("admin"))])
 async def get_config_section(request: Request, config_section: str):
@@ -21,7 +28,7 @@ async def get_config_section(request: Request, config_section: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading custom config file: {e}")
     
-@router.post("/", summary="Update custom configuration")
+@router.post("/", summary="Update custom configuration", dependencies=[Depends(require_role("admin"))])
 async def update_custom_config(request: Request, new_config: dict):
     try:
         request.app.state.config = new_config
@@ -30,7 +37,7 @@ async def update_custom_config(request: Request, new_config: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating custom config file: {e}")
     
-@router.post("/{config_section}", summary="Update specific configuration section")
+@router.post("/{config_section}", summary="Update specific configuration section", dependencies=[Depends(require_role("admin"))])
 async def update_config_section(request: Request, config_section: str, new_config: dict):
     try:
         if config_section in request.app.state.config:

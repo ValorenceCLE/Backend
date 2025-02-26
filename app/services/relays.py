@@ -56,3 +56,8 @@ class Controller(Relay):
         GPIO.output(self.hardwareConfig.pin, GPIO.HIGH)
         time.sleep(self.pulseTime)
         self.turn_off()
+
+
+# Example class usage
+# relay = Relay(id="1", name="relay_1", enabled=True, state="off", bootState="off", pulseTime=5, schedule=None, dashboard=None)
+# hardware_config = HardwareConfig(id="1", pin=17, address="0x20", setup="OUT", normallyOpen=True)
