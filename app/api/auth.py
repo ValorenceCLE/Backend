@@ -18,7 +18,7 @@ class Token(BaseModel):
     token_type: str
 
 
-@router.post("/login", response_model=Token, summary="User login and JWT token retrieval")
+@router.post("/login", response_model=Token, summary="User login and JWT token retrieval", include_in_schema=False)
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     """
     Login endpoint that verifies user credentials and returns a JWT token.

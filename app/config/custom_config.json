@@ -46,7 +46,8 @@
             "schedule": {
                 "enabled": true,
                 "on_time": "00:00",
-                "off_time": "23:59"
+                "off_time": "23:59",
+                "days_mask": 254
             },
             "dashboard": {
                 "on_button": {
@@ -79,7 +80,8 @@
             "schedule": {
                 "enabled": true,
                 "on_time": "00:00",
-                "off_time": "23:59"
+                "off_time": "23:59",
+                "days_mask": 254
             },
             "dashboard": {
                 "on_button": {
@@ -112,7 +114,8 @@
             "schedule": {
                 "enabled": true,
                 "on_time": "04:59",
-                "off_time": "18:00"
+                "off_time": "18:00",
+                "days_mask": 254
             },
             "dashboard": {
                 "on_button": {
@@ -145,7 +148,8 @@
             "schedule": {
                 "enabled": true,
                 "on_time": "18:00",
-                "off_time": "04:59"
+                "off_time": "04:59",
+                "days_mask": 254
             },
             "dashboard": {
                 "on_button": {
@@ -178,7 +182,8 @@
             "schedule": {
                 "enabled": true,
                 "on_time": "18:00",
-                "off_time": "04:59"
+                "off_time": "04:59",
+                "days_mask": 194
             },
             "dashboard": {
                 "on_button": {
@@ -209,7 +214,8 @@
             "boot_state": "on",
             "pulse_time": 5,
             "schedule": {
-                "enabled": false
+                "enabled": false,
+                "days_mask": 0
             },
             "dashboard": {
                 "on_button": {
@@ -236,14 +242,14 @@
     "tasks": {
         "1": {
             "name": "Test",
-            "source": "relay1",
+            "source": "relay_1",
             "field": "volts",
             "operator": ">",
             "value": 5,
             "actions": [
                 {
                     "type": "io",
-                    "target": "relay1",
+                    "target": "relay_1",
                     "state": "on"
                 },
                 {
@@ -254,14 +260,14 @@
         },
         "2": {
             "name": "Test 2",
-            "source": "relay2",
+            "source": "relay_2",
             "field": "volts",
             "operator": "<",
             "value": 5,
             "actions": [
                 {
                     "type": "io",
-                    "target": "relay2",
+                    "target": "relay_2",
                     "state": "off"
                 },
                 {

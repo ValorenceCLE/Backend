@@ -30,7 +30,10 @@
         "smtp_password": "example password",
         "smtp_secure": "tls",
         "return_email": "example email",
-        "emails": ["example email", "example email"]
+        "emails": [
+            "example email",
+            "example email"
+        ]
     },
     "relays": {
         "1": {
@@ -43,7 +46,8 @@
             "schedule": {
                 "enabled": true,
                 "on_time": "00:00",
-                "off_time": "23:59"
+                "off_time": "23:59",
+                "days_mask": 254
             },
             "dashboard": {
                 "on_button": {
@@ -76,7 +80,8 @@
             "schedule": {
                 "enabled": true,
                 "on_time": "00:00",
-                "off_time": "23:59"
+                "off_time": "23:59",
+                "days_mask": 254
             },
             "dashboard": {
                 "on_button": {
@@ -109,7 +114,8 @@
             "schedule": {
                 "enabled": true,
                 "on_time": "04:59",
-                "off_time": "18:00"
+                "off_time": "18:00",
+                "days_mask": 254
             },
             "dashboard": {
                 "on_button": {
@@ -142,7 +148,8 @@
             "schedule": {
                 "enabled": true,
                 "on_time": "18:00",
-                "off_time": "04:59"
+                "off_time": "04:59",
+                "days_mask": 254
             },
             "dashboard": {
                 "on_button": {
@@ -175,7 +182,8 @@
             "schedule": {
                 "enabled": true,
                 "on_time": "18:00",
-                "off_time": "04:59"
+                "off_time": "04:59",
+                "days_mask": 194
             },
             "dashboard": {
                 "on_button": {
@@ -205,7 +213,10 @@
             "state": "on",
             "boot_state": "on",
             "pulse_time": 5,
-            "schedule": {"enabled": false},
+            "schedule": {
+                "enabled": false,
+                "days_mask": 0
+            },
             "dashboard": {
                 "on_button": {
                     "show": true,
@@ -230,25 +241,40 @@
     },
     "tasks": {
         "1": {
+
             "name": "Test",
-            "source": "relay1",
+            "source": "relay_1",
             "field": "volts",
             "operator": ">",
             "value": 5,
             "actions": [
-                {"type": "io", "target": "relay1", "state": "on"},
-                {"type": "email", "message": "Test message"}
+                {
+                    "type": "io",
+                    "target": "relay_1",
+                    "state": "on"
+                },
+                {
+                    "type": "email",
+                    "message": "Test message"
+                }
             ]
         },
         "2": {
             "name": "Test 2",
-            "source": "relay2",
+            "source": "relay_2",
             "field": "volts",
             "operator": "<",
             "value": 5,
             "actions": [
-                {"type": "io", "target": "relay2", "state": "off"},
-                {"type": "email", "message": "Test message 2"}
+                {
+                    "type": "io",
+                    "target": "relay_2",
+                    "state": "off"
+                },
+                {
+                    "type": "email",
+                    "message": "Test message 2"
+                }
             ]
         }
     }

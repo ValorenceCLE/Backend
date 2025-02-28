@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     APP_NAME: str = 'FastAPI App'
     SECRET_KEY: str = 'your_secret_key'
     ALGORITHM: str = 'HS256'
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 360
 
     USER_USERNAME: str = 'user'
     HASHED_USER_PASSWORD: str  # ✅ Use hashed password
