@@ -1,8 +1,8 @@
 import RPi.GPIO as GPIO  # type: ignore
 import logging
 from typing import Any
-from app.models.relays import Relay, HardwareConfig
-from app.utils.config import settings
+from models.relays import Relay, HardwareConfig
+from utils.config import settings
 import time
 
 # import gpiozero # type: ignore #! Alternative library for GPIO control

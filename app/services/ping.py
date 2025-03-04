@@ -1,3 +1,3 @@
-import aioping
+
 
 # Ping test

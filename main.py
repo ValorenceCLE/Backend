@@ -14,12 +14,12 @@ from app.api.admin import router as admin_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Load the configuration file at startup
-    async with aiofiles.open("/app/config/custom_config.json", "r") as file:
+    async with aiofiles.open("app/config/custom_config.json", "r") as file:
         contents = await file.read()
         app.state.config = json.loads(contents)
     yield
     # Save the configuration file at shutdown
-    async with aiofiles.open("/app/config/custom_config.json", "w") as file:
+    async with aiofiles.open("app/config/custom_config.json", "w") as file:
         await file.write(json.dumps(app.state.config, indent=4))
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
