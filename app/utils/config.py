@@ -1,8 +1,8 @@
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parents[2]
-ENV_PATH = BASE_DIR / 'secrets' / 'settings.env'
+BASE_DIR = Path('/app')
+ENV_PATH = BASE_DIR / 'settings.env'
 
 class Settings(BaseSettings):
     APP_NAME: str = 'FastAPI App'

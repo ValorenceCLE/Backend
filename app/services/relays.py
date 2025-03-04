@@ -5,6 +5,9 @@ from app.models.relays import Relay, HardwareConfig
 from app.utils.config import settings
 import time
 
+# import gpiozero # type: ignore #! Alternative library for GPIO control
+#! RPi.GPIO may not be compatable with Pi5, use gpiozero instead
+
 
 class Controller(Relay):
     """
