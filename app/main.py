@@ -49,4 +49,9 @@ def read_root():
     return {"message": "Welcome to " + settings.APP_NAME}
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="localhost", port=8000, reload=True)
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,  # Ensure this matches the proxy_pass in Nginx
+        reload=True  # Optional: Enable reload for development
+    )

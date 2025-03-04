@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime, timedelta
 from jose import jwt, JWTError
-from utils.hashing import verify_password
-from utils.config import settings
+from app.utils.hashing import verify_password
+from app.utils.config import settings
 
 # ✅ Configure logging
 logging.basicConfig(level=logging.INFO)

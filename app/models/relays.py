@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
-from utils.config import settings
+from app.utils.config import settings
 
 class Schedule(BaseModel):
     """

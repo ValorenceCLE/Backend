@@ -1,5 +1,5 @@
 from fastapi import Request, APIRouter, HTTPException, Depends
-from utils.dependencies import require_role
+from app.utils.dependencies import require_role
 
 
 router = APIRouter(prefix="/config", tags=["Admin APi Configuration"])
