@@ -7,9 +7,9 @@ import aiofiles
 import json
 
 # Custom imports
-from utils.config import settings
-from api.auth import router as auth_router
-from api.admin import router as admin_router
+from app.utils.config import settings
+from app.api.auth import router as auth_router
+from app.api.admin import router as admin_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
