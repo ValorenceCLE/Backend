@@ -1,21 +1,17 @@
-# Backend/Dockerfile.backend
 FROM python:3.11-alpine
 WORKDIR /app
 
-# Install dependencies
+# Install backend dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend code
+# Copy backend source code (including the app folder and secrets)
 COPY . .
 
-# Copy environment file if you have secrets in /secrets/settings.env
-# and ensure the $ signs in hashed passwords are doubled.
+# Copy the environment file (ensure hashed passwords use $$ in place of $)
 COPY secrets/settings.env /app/settings.env
 ENV ENV_FILE=/app/settings.env
 
-# Expose port 8000
 EXPOSE 8000
 
-# Run FastAPI
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

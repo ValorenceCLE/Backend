@@ -2,7 +2,7 @@ from fastapi import Request, APIRouter, HTTPException, Depends
 from app.utils.dependencies import require_role
 
 
-router = APIRouter(prefix="/api/config", tags=["Admin APi Configuration"])
+router = APIRouter(prefix="/config", tags=["Admin APi Configuration"])
 
 @router.get("/", summary="Retrieve custom configuration")
 async def get_custom_config(request: Request):

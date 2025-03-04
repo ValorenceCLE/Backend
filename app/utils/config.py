@@ -11,10 +11,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 360
 
     USER_USERNAME: str = 'user'
-    HASHED_USER_PASSWORD: str  # ✅ Use hashed password
+    HASHED_USER_PASSWORD: str  # Expected to be provided in settings.env
 
     ADMIN_USERNAME: str = 'admin'
-    HASHED_ADMIN_PASSWORD: str  # ✅ Use hashed password
+    HASHED_ADMIN_PASSWORD: str  # Expected to be provided in settings.env
 
     class Config:
         env_file = str(ENV_PATH)

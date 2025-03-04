@@ -40,8 +40,8 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
         content={"message": exc.detail}
     )
 
-app.include_router(auth_router)
-app.include_router(admin_router)
+app.include_router(auth_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 
 @app.get("/")
