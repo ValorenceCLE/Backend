@@ -11,7 +11,7 @@ from app.utils.security import authenticate_user, create_access_token
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 class Token(BaseModel):
     access_token: str
