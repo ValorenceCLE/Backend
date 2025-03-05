@@ -1,6 +1,6 @@
 {
     "general": {
-        "name": "R&D Test System",
+        "system_name": "R&D Test System",
         "system_id": "10000000bb6b64b8",
         "version": "1.0.0",
         "agency": "Valorence",
@@ -241,6 +241,7 @@
     },
     "tasks": {
         "1": {
+
             "name": "Test",
             "source": "relay_1",
             "field": "volts",
