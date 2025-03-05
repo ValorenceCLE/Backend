@@ -1,7 +1,9 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
-from app.utils.config import settings
-
+from typing import Optional
+try:
+    from app.utils.config import settings
+except ImportError:
+    from utils.config import settings   
 class Schedule(BaseModel):
     """
     Schedule model representing the on and off times for the relay.

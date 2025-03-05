@@ -1,6 +1,11 @@
 from fastapi import Request, APIRouter, HTTPException, Depends
-from app.utils.dependencies import require_role
-
+try:
+    from app.utils.dependencies import require_role
+except ImportError:
+    from utils.dependencies import require_role
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/config", tags=["Admin APi Configuration"])
 

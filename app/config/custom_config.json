@@ -275,39 +275,6 @@
                     "message": "Test message 2"
                 }
             ]
-        },
-        "3": {
-            "id": null,
-            "name": "Too Hot",
-            "source": "environment",
-            "field": "Temperature",
-            "operator": ">",
-            "value": 100,
-            "actions": [
-                {
-                    "type": "io",
-                    "state": "on",
-                    "target": "relay_3"
-                }
-            ]
-        },
-        "4": {
-            "id": null,
-            "name": "WAY too hot",
-            "source": "environment",
-            "field": "Temperature",
-            "operator": ">",
-            "value": 110,
-            "actions": [
-                {
-                    "type": "io",
-                    "state": "on",
-                    "target": "relay_3"
-                },
-                {
-                    "type": "reboot"
-                }
-            ]
         }
     }
 }
