@@ -76,7 +76,7 @@
             "enabled": true,
             "state": "on",
             "boot_state": "on",
-            "pulse_time": 5,
+            "pulse_time": 10,
             "schedule": {
                 "enabled": true,
                 "on_time": "00:00",
@@ -110,7 +110,7 @@
             "enabled": true,
             "state": "on",
             "boot_state": "on",
-            "pulse_time": 5,
+            "pulse_time": 360,
             "schedule": {
                 "enabled": true,
                 "on_time": "04:59",
@@ -144,7 +144,7 @@
             "enabled": true,
             "state": "on",
             "boot_state": "on",
-            "pulse_time": 5,
+            "pulse_time": 60,
             "schedule": {
                 "enabled": true,
                 "on_time": "18:00",
@@ -178,7 +178,7 @@
             "enabled": true,
             "state": "on",
             "boot_state": "on",
-            "pulse_time": 5,
+            "pulse_time": 360,
             "schedule": {
                 "enabled": true,
                 "on_time": "18:00",
