@@ -9,8 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Copy the environment file (ensure hashed passwords use $$ in place of $)
-COPY secrets/settings.env /app/settings.env
-ENV ENV_FILE=/app/settings.env
+COPY secrets/settings.env /settings.env
+ENV ENV_FILE=app/settings.env
 
 EXPOSE 8000
 
