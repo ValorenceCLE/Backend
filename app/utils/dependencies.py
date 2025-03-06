@@ -29,12 +29,21 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             detail="Could not validate credentials",
         )
 
-def require_role(required_role: str):
+def require_role(required_roles):
     """
-    Dependency to enforce role-based access control (RBAC).
+    Dependency to enforce role-based access control.
+    Accepts either a single role (str) or a list of allowed roles.
     """
     async def role_checker(user=Depends(get_current_user)):
-        if user["role"] != required_role:
+        if isinstance(required_roles, str):
+            allowed = [required_roles]
+        else:
+            allowed = required_roles
+
+        # Debug logging - you can remove this later
+        print(f"[DEBUG] User role: {user.get('role')}, Allowed: {allowed}")
+        
+        if user["role"] not in allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access denied for role: {user['role']}",

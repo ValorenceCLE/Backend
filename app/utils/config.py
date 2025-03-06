@@ -1,8 +1,22 @@
 from pydantic_settings import BaseSettings
+from pydantic import ValidationError
+
 from pathlib import Path
 
-BASE_DIR = Path('/app')
-ENV_PATH = BASE_DIR / 'settings.env'
+
+def path_exists(path: str) -> bool:
+    return Path(path).exists()
+
+def get_env_path() -> Path:
+    try:
+        BASE_DIR = Path(__file__).resolve().parents[2]
+        ENV_PATH = BASE_DIR / 'secrets' / 'settings.env'
+
+    except NameError or ValueError or ValidationError:
+        BASE_DIR = Path('/app')
+        ENV_PATH = BASE_DIR / 'settings.env'
+    return ENV_PATH
+
 
 class Settings(BaseSettings):
     APP_NAME: str = 'FastAPI App'
@@ -17,7 +31,7 @@ class Settings(BaseSettings):
     HASHED_ADMIN_PASSWORD: str
 
     class Config:
-        env_file = str('/settings.env')
+        env_file = str(get_env_path())
         env_file_encoding = 'utf-8'
         extra = 'ignore'
 

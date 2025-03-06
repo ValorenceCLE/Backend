@@ -1,6 +1,6 @@
 from fastapi import Request, APIRouter, HTTPException, Depends, status
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 try:
     from app.utils.dependencies import require_role
@@ -11,6 +11,8 @@ except ImportError:
 
 router = APIRouter(prefix="/relay", tags=["Relay Configuration API"])
 logger = logging.getLogger(__name__)
+
+
 
 def get_controller(relay_id: str, request: Request) -> Controller:
     """
@@ -105,3 +107,18 @@ async def pulse_relay(relay_id: str, request: Request) -> Dict[str, str]:
             detail="Error pulsing relay"
         )
     return {"message": f"Relay '{relay_id}' pulsed for {controller.pulseTime} seconds"}
+
+
+@router.get("/active", summary="Retrieve active relays")
+async def get_active_relays(request: Request) -> List[Dict[str, Any]]:
+    """
+    Return a list of the active relays - This is meant to be used by the dashboard so it only returns enabled relays.
+    """
+
+    #relays = request.app.state.config.get("relays", {})
+    #return [relay for relay in relays.values() if relay.get("enabled")]
+
+    relays = []
+    for relay in request.app.state.config.get("relays", {}).values():
+        if relay.get("enabled"):
+            relays.append(relay)
