@@ -241,7 +241,6 @@
     },
     "tasks": {
         "1": {
-
             "name": "Test",
             "source": "relay_1",
             "field": "volts",
