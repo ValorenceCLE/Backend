@@ -1,14 +1,10 @@
 import asyncio
-import json
 import logging
-from typing import Any, Dict
-
-import aiofiles
-
+from typing import Any, Dict, Optional
 try:
     import gpiozero
 except ImportError:
-    gpiozero = None  # Simulation mode when no GPIO available
+    gpiozero = None  # Simulation mode when no GPIO is available
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -37,22 +33,28 @@ class FakeOutputDevice:
 
 class RelayController:
     """
-    RelayController controls a relay via GPIO.
+    RelayController controls a relay using GPIO (or in simulation mode).
     
-    Logical states are "on" and "off". The wiring is defined by the relay’s 'normalState'.
-    This class exposes simple async methods (turn_on, turn_off, pulse, device_state)
-    and ensures that each relay’s internal state is updated and persisted to the hardware
-    configuration file.
+    Static configuration (relayId, gpioPin, sensorAddress, normalState, currentState) comes
+    from hardware_config.py. Dynamic fields (such as pulse_time) are obtained from app.state.config.
+    
+    This class exposes simple asynchronous methods:
+      - turn_on()
+      - turn_off()
+      - pulse(duration: Optional[float])
+      - device_state()
+      
+    It does not perform any file I/O.
     """
-    def __init__(self, config: Dict[str, Any], hardware_config_file: str = "app/config/hardware_config.json") -> None:
+    def __init__(self, config: Dict[str, Any]) -> None:
         """
         Expected keys in config:
-          - relayId: Unique identifier (e.g. "relay_1")
-          - gpioPin: GPIO pin number used to control the relay
-          - normalState: Defines the hardware wiring; expected values "open" or "closed"
-          - currentState: The current state ("on" or "off"); must be in sync with hardware
+          - relayId: e.g. "relay_1"
+          - gpioPin: e.g. 22
+          - normalState: "open" or "closed"
+          - currentState: "on" or "off"
           - bootState: Desired state at boot ("on" or "off")
-          - pulse_time: Optional pulse duration in seconds (default: 1)
+          - pulse_time: Default pulse duration (from static config)
         """
         self.relay_id = config["relayId"]
         self.gpio_pin = config["gpioPin"]
@@ -60,9 +62,8 @@ class RelayController:
         self.boot_state = config.get("bootState", "off").lower()
         self.logical_state = config.get("currentState", self.boot_state).lower()
         self.pulse_time = config.get("pulse_time", 1)
-        self.hardware_config_file = hardware_config_file
 
-        # Determine the physical device's initial output from stored logical state.
+        # Determine the initial physical output from the stored logical state.
         initial = self._initial_physical_state()
         if gpiozero is not None:
             try:
@@ -78,9 +79,9 @@ class RelayController:
 
     def _initial_physical_state(self) -> bool:
         """
-        Maps stored logical state to physical output.
-          For normalState "open": logical "on" → True; "off" → False.
-          For normalState "closed": logical "on" → False; "off" → True.
+        Maps the stored logical state to a physical output.
+          For normalState "open": logical "on" → True, "off" → False.
+          For normalState "closed": logical "on" → False, "off" → True.
         """
         if self.normal_state == "open":
             return True if self.logical_state == "on" else False
@@ -92,22 +93,20 @@ class RelayController:
 
     def _setup_device(self) -> None:
         """
-        Ensures the relay is set to its boot state.
-        If the actual state does not match the boot state, update it and persist the change.
+        Ensure the relay is set to its boot state.
         """
         current = self._get_logical_state()
         if current != self.boot_state:
             logger.info(f"{self.relay_id}: current state '{current}' does not match boot state '{self.boot_state}'. Updating.")
             self._apply_logical_state(self.boot_state)
-            self._update_config_sync(self.boot_state)
         else:
             logger.info(f"{self.relay_id}: already in boot state '{self.boot_state}'.")
 
     def _apply_logical_state(self, desired: str) -> None:
         """
         Applies the desired logical state ("on" or "off") to the physical device.
-          - For normalState "open": "on" → device.on(), "off" → device.off()
-          - For normalState "closed": inverted logic.
+          For normalState "open": "on" → device.on(), "off" → device.off()
+          For normalState "closed": inverted logic.
         """
         desired = desired.lower()
         if self.normal_state == "open":
@@ -128,7 +127,7 @@ class RelayController:
         """
         Returns the current logical state by mapping the physical device output.
         """
-        physical = self.device.value  # True or False
+        physical = self.device.value
         if self.normal_state == "open":
             return "on" if physical else "off"
         elif self.normal_state == "closed":
@@ -137,63 +136,17 @@ class RelayController:
             logger.error(f"Invalid normalState for {self.relay_id}")
             return "unknown"
 
-    def _update_config_sync(self, state: str) -> None:
-        """
-        Synchronously updates the hardware configuration file with the new state.
-        It modifies the "currentState" for the matching relay.
-        """
-        try:
-            with open(self.hardware_config_file, "r") as f:
-                config_data = json.load(f)
-            updated = False
-            for relay in config_data.get("relays", []):
-                if relay.get("relayId") == self.relay_id:
-                    relay["currentState"] = state
-                    updated = True
-                    break
-            if updated:
-                with open(self.hardware_config_file, "w") as f:
-                    json.dump(config_data, f, indent=4)
-            else:
-                logger.warning(f"{self.relay_id} not found in hardware config file.")
-        except Exception as e:
-            logger.error(f"Error updating hardware config for {self.relay_id}: {e}")
-
-    async def _update_config_async(self, state: str) -> None:
-        """
-        Asynchronously updates the hardware configuration file.
-        """
-        try:
-            async with aiofiles.open(self.hardware_config_file, "r") as f:
-                data = await f.read()
-            config_data = json.loads(data)
-            updated = False
-            for relay in config_data.get("relays", []):
-                if relay.get("relayId") == self.relay_id:
-                    relay["currentState"] = state
-                    updated = True
-                    break
-            if updated:
-                async with aiofiles.open(self.hardware_config_file, "w") as f:
-                    await f.write(json.dumps(config_data, indent=4))
-            else:
-                logger.warning(f"{self.relay_id} not found in hardware config file (async).")
-        except Exception as e:
-            logger.error(f"Error updating hardware config async for {self.relay_id}: {e}")
-
     def sync_turn_on(self) -> None:
         """
-        Synchronously turns the relay on and updates the hardware config.
+        Synchronously turns the relay on.
         """
         self._apply_logical_state("on")
-        self._update_config_sync("on")
 
     def sync_turn_off(self) -> None:
         """
-        Synchronously turns the relay off and updates the hardware config.
+        Synchronously turns the relay off.
         """
         self._apply_logical_state("off")
-        self._update_config_sync("off")
 
     async def turn_on(self) -> None:
         """
@@ -209,23 +162,24 @@ class RelayController:
 
     async def device_state(self) -> str:
         """
-        Asynchronously returns the current logical state.
+        Asynchronously retrieves the current logical state.
         """
         return await asyncio.to_thread(self._get_logical_state)
 
-    async def pulse(self) -> None:
+    async def pulse(self, duration: Optional[float] = None) -> None:
         """
-        Asynchronously pulses the relay for the configured duration.
-        Toggles the relay, waits asynchronously, then reverts to its previous state.
+        Asynchronously pulses the relay.
+        If a duration is provided, it is used; otherwise, self.pulse_time is used.
         """
+        dur = duration if duration is not None else self.pulse_time
         current = await self.device_state()
         if current == "on":
             await self.turn_off()
-            await asyncio.sleep(self.pulse_time)
+            await asyncio.sleep(dur)
             await self.turn_on()
         else:
             await self.turn_on()
-            await asyncio.sleep(self.pulse_time)
+            await asyncio.sleep(dur)
             await self.turn_off()
 
     def sync_cleanup(self) -> None:
