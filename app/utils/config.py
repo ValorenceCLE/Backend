@@ -1,11 +1,7 @@
 from pydantic_settings import BaseSettings
 from pydantic import ValidationError
-
 from pathlib import Path
 
-
-def path_exists(path: str) -> bool:
-    return Path(path).exists()
 
 def get_env_path() -> Path:
     try:
@@ -16,7 +12,6 @@ def get_env_path() -> Path:
         BASE_DIR = Path('/app')
         ENV_PATH = BASE_DIR / 'settings.env'
     return ENV_PATH
-
 
 class Settings(BaseSettings):
     APP_NAME: str = 'FastAPI App'

@@ -1,4 +1,4 @@
-{
+hardware = {
     "relays": [
         {
             "relayId": "relay_1",

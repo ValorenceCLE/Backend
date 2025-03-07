@@ -4,6 +4,7 @@ import aiofiles
 import uvicorn
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 try: 
     from app.utils.config import settings
@@ -28,11 +29,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:80"],
+    allow_origins=["http://localhost:5173", "http://localhost:80", "http://localhost:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,9 +52,6 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(relay_router, prefix="/api")
 
-@app.get("/")
-def read_root():
-    return {"message": f"Welcome to {settings.APP_NAME}"}
 
 if __name__ == "__main__":
     uvicorn.run(

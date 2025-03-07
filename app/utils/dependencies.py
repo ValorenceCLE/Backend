@@ -40,9 +40,6 @@ def require_role(required_roles):
         else:
             allowed = required_roles
 
-        # Debug logging - you can remove this later
-        print(f"[DEBUG] User role: {user.get('role')}, Allowed: {allowed}")
-        
         if user["role"] not in allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -50,3 +47,44 @@ def require_role(required_roles):
             )
         return user
     return role_checker
+
+async def is_admin(user: dict = Depends(get_current_user)) -> bool:
+    """
+    Checks if the authenticated user has an admin role.
+    Returns True if the user's role is 'admin', otherwise raises an HTTPException.
+    """
+    if user.get("role") == "admin":
+        return True
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Admins only",
+        )
+
+async def is_user(user: dict = Depends(get_current_user)) -> bool:
+    """
+    Checks if the authenticated user has a user role.
+    Returns True if the user's role is 'user', otherwise raises an HTTPException.
+    """
+    if user.get("role") == "user":
+        return True
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: Users only",
+        )
+    
+async def is_authenticated(token: str = Depends(oauth2_scheme)) -> bool:
+    """
+    Checks if the user is authenticated by validating the JWT token.
+    Returns True if valid, otherwise raises an HTTPException.
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        return True
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
