@@ -36,7 +36,7 @@
         ]
     },
     "relays": {
-        "1": {
+        "relay_1": {
             "id": "relay_1",
             "name": "Router",
             "enabled": true,
@@ -70,7 +70,7 @@
                 }
             }
         },
-        "2": {
+        "relay_2": {
             "id": "relay_2",
             "name": "Camera",
             "enabled": true,
@@ -104,7 +104,7 @@
                 }
             }
         },
-        "3": {
+        "relay_3": {
             "id": "relay_3",
             "name": "Fan",
             "enabled": true,
@@ -138,7 +138,7 @@
                 }
             }
         },
-        "4": {
+        "relay_4": {
             "id": "relay_4",
             "name": "IR Light",
             "enabled": true,
@@ -172,7 +172,7 @@
                 }
             }
         },
-        "5": {
+        "relay_5": {
             "id": "relay_5",
             "name": "Strobe Light",
             "enabled": true,
@@ -206,7 +206,7 @@
                 }
             }
         },
-        "6": {
+        "relay_6": {
             "id": "relay_6",
             "name": "Aux 1",
             "enabled": false,
