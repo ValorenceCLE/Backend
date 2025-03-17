@@ -176,7 +176,7 @@
             "id": "relay_5",
             "name": "Strobe Light",
             "enabled": true,
-            "state": "on",
+            "state": "off",
             "boot_state": "on",
             "pulse_time": 5,
             "schedule": {

@@ -1,17 +1,38 @@
-FROM python:3.11-alpine
-WORKDIR /app
+# Stage 1: Base Image for Dependencies
+FROM python:3.11-bookworm AS base
 
-# Install backend dependencies
+# Install build tools (and optionally Rust if required)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc g++ make python3-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Set up a virtual environment for Python
+RUN python -m venv /venv
+ENV PATH="/venv/bin:$PATH"
+
+# Set up the working directory for dependencies
+WORKDIR /deps
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy backend source code (including the app folder and secrets)
+# Optionally remove build tools to reduce image size
+RUN apt-get remove -y gcc g++ make python3-dev && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
+# Stage 2: Final Runtime Stage (Backend)
+FROM python:3.11-slim-bookworm AS backend
+
+# Copy virtual environment from base stage
+COPY --from=base /venv /venv
+ENV PATH="/venv/bin:$PATH"
+
+# Install additional OS-level dependencies for GPIO if needed
+RUN apt-get update && \
+    apt-get install -y python3-rpi.gpio && \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy the application code
+WORKDIR /app
 COPY . .
 
-# Copy the environment file (ensure hashed passwords use $$ in place of $)
-COPY secrets/settings.env /settings.env
-ENV ENV_FILE=app/settings.env
-
 EXPOSE 8000
-
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

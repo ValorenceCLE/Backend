@@ -2,13 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 from pydantic import BaseModel
+from app.utils.config import settings
+from app.utils.security import authenticate_user, create_access_token
 import logging
-try:
-    from app.utils.config import settings
-    from app.utils.security import authenticate_user, create_access_token
-except ImportError:
-    from utils.config import settings
-    from utils.security import authenticate_user, create_access_token
 
 # ✅ Configure logging
 logging.basicConfig(level=logging.INFO)

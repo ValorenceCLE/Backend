@@ -2,7 +2,6 @@ from pydantic_settings import BaseSettings
 from pydantic import ValidationError
 from pathlib import Path
 
-
 def get_env_path() -> Path:
     try:
         BASE_DIR = Path(__file__).resolve().parents[2]

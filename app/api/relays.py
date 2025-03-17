@@ -1,14 +1,9 @@
 import logging
 from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException, Depends, status, Request, Body
-try: 
-    from app.utils.dependencies import is_authenticated
-    from app.services.relay_controller import RelayController
-    from app.config.hardware_config import hardware
-except ImportError:
-    from utils.dependencies import is_authenticated
-    from services.relay_controller import RelayController
-    from config.hardware_config import hardware
+from app.utils.dependencies import is_authenticated
+from app.services.relay_controller import RelayController
+from app.utils.hardware_config import hardware
 
 router = APIRouter(prefix="/relays", tags=["Relay Configuration API"])
 logger = logging.getLogger(__name__)
@@ -19,13 +14,11 @@ for relay_cfg in hardware.get("relays", []):
     relay_id = relay_cfg.get("relayId")
     if relay_id:
         RELAY_CONTROLLERS[relay_id] = RelayController(relay_cfg)
+        logger.info(f"Initialized RelayController for relay_id: {relay_id}")
 
 
 def update_dynamic_config(request: Request, relay_id: str, new_state: str) -> None:
-    """
-    Update the in-memory dynamic configuration stored in app.state.config for the given relay.
-    Assumes that request.app.state.config.relays is an object keyed by relay IDs.
-    """
+    logger.debug(f"Updating dynamic config for relay_id: {relay_id} with new state: {new_state}")
     config = request.app.state.config
     if "relays" not in config:
         config["relays"] = {}
@@ -44,48 +37,34 @@ def update_dynamic_config(request: Request, relay_id: str, new_state: str) -> No
             # Include other dynamic fields as needed.
         }
     request.app.state.config = config
+    logger.debug(f"Dynamic config updated for relay_id: {relay_id}")
 
 
 @router.get("/", dependencies=[Depends(is_authenticated)])
 async def get_all_relays(request: Request) -> Dict[str, Any]:
-    """
-    GET /api/relays/
-    
-    Example Request:
-      GET http://localhost:8000/api/relays/
-      Headers: { Authorization: "Bearer <your_token>" }
-    
-    Returns the state of all relays.
-    """
+    logger.info("Received request to get all relays")
     results = {}
     for relay_id, controller in RELAY_CONTROLLERS.items():
         try:
             state = await controller.device_state()
             results[relay_id] = state
         except Exception as e:
+            logger.error(f"Error getting state for relay_id: {relay_id} - {str(e)}")
             results[relay_id] = f"Error: {str(e)}"
     return results
 
 
 @router.post("/on", dependencies=[Depends(is_authenticated)])
 async def turn_relays_on(request: Request, relay_ids: List[str] = Body(..., example=["relay_1", "relay_3"])) -> Dict[str, Any]:
-    """
-    POST /api/relays/on
-    
-    Example Request Body:
-      [
-        "relay_1",
-        "relay_3"
-      ]
-    
-    Turns on the specified relays.
-    """
+    logger.info(f"Received request to turn on relays: {relay_ids}")
     results = {}
     if not relay_ids:
+        logger.warning("No relay IDs provided in the request body")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Relay IDs must be provided in the request body.")
     for relay_id in relay_ids:
         controller = RELAY_CONTROLLERS.get(relay_id)
         if not controller:
+            logger.warning(f"Relay not found: {relay_id}")
             results[relay_id] = "Relay not found"
         else:
             try:
@@ -93,8 +72,10 @@ async def turn_relays_on(request: Request, relay_ids: List[str] = Body(..., exam
                 state = await controller.device_state()
                 results[relay_id] = state
                 update_dynamic_config(request, relay_id, state)
+                logger.info(f"Turned on relay_id: {relay_id} with state: {state}")
             except Exception as e:
                 current_state = await controller.device_state()
+                logger.error(f"Error turning on relay_id: {relay_id} - {str(e)}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail={relay_id: {"error": str(e), "state": current_state}},
@@ -104,23 +85,15 @@ async def turn_relays_on(request: Request, relay_ids: List[str] = Body(..., exam
 
 @router.post("/off", dependencies=[Depends(is_authenticated)])
 async def turn_relays_off(request: Request, relay_ids: List[str] = Body(..., example=["relay_2", "relay_4"])) -> Dict[str, Any]:
-    """
-    POST /api/relays/off
-    
-    Example Request Body:
-      [
-        "relay_2",
-        "relay_4"
-      ]
-    
-    Turns off the specified relays.
-    """
+    logger.info(f"Received request to turn off relays: {relay_ids}")
     results = {}
     if not relay_ids:
+        logger.warning("No relay IDs provided in the request body")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Relay IDs must be provided in the request body.")
     for relay_id in relay_ids:
         controller = RELAY_CONTROLLERS.get(relay_id)
         if not controller:
+            logger.warning(f"Relay not found: {relay_id}")
             results[relay_id] = "Relay not found"
         else:
             try:
@@ -128,8 +101,10 @@ async def turn_relays_off(request: Request, relay_ids: List[str] = Body(..., exa
                 state = await controller.device_state()
                 results[relay_id] = state
                 update_dynamic_config(request, relay_id, state)
+                logger.info(f"Turned off relay_id: {relay_id} with state: {state}")
             except Exception as e:
                 current_state = await controller.device_state()
+                logger.error(f"Error turning off relay_id: {relay_id} - {str(e)}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail={relay_id: {"error": str(e), "state": current_state}},
@@ -139,24 +114,15 @@ async def turn_relays_off(request: Request, relay_ids: List[str] = Body(..., exa
 
 @router.post("/pulse", dependencies=[Depends(is_authenticated)])
 async def pulse_relays(request: Request, relay_ids: List[str] = Body(..., example=["relay_3", "relay_5"])) -> Dict[str, Any]:
-    """
-    POST /api/relays/pulse
-    
-    Example Request Body:
-      [
-        "relay_3",
-        "relay_5"
-      ]
-    
-    Pulses the specified relays for their configured duration.
-    The pulse duration is taken from the dynamic configuration (app.state.config) if available.
-    """
+    logger.info(f"Received request to pulse relays: {relay_ids}")
     results = {}
     if not relay_ids:
+        logger.warning("No relay IDs provided in the request body")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Relay IDs must be provided in the request body.")
     for relay_id in relay_ids:
         controller = RELAY_CONTROLLERS.get(relay_id)
         if not controller:
+            logger.warning(f"Relay not found: {relay_id}")
             results[relay_id] = "Relay not found"
         else:
             try:
@@ -167,8 +133,10 @@ async def pulse_relays(request: Request, relay_ids: List[str] = Body(..., exampl
                 state = await controller.device_state()
                 results[relay_id] = state
                 update_dynamic_config(request, relay_id, state)
+                logger.info(f"Pulsed relay_id: {relay_id} for duration: {duration} with state: {state}")
             except Exception as e:
                 current_state = await controller.device_state()
+                logger.error(f"Error pulsing relay_id: {relay_id} - {str(e)}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail={relay_id: {"error": str(e), "state": current_state}},
@@ -178,87 +146,65 @@ async def pulse_relays(request: Request, relay_ids: List[str] = Body(..., exampl
 
 @router.get("/{relay_id}", dependencies=[Depends(is_authenticated)])
 async def get_relay_state(relay_id: str, request: Request) -> Dict[str, Any]:
-    """
-    GET /api/relays/{relay_id}
-    
-    Example Request:
-      GET http://localhost:8000/api/relays/relay_1
-      Headers: { Authorization: "Bearer <your_token>" }
-    
-    Returns the state of the specified relay.
-    """
+    logger.info(f"Received request to get state of relay_id: {relay_id}")
     controller = RELAY_CONTROLLERS.get(relay_id)
     if not controller:
+        logger.warning(f"Relay not found: {relay_id}")
         raise HTTPException(status_code=404, detail="Relay not found")
     try:
         state = await controller.device_state()
         update_dynamic_config(request, relay_id, state)
+        logger.info(f"Retrieved state for relay_id: {relay_id} - {state}")
         return {"relayId": relay_id, "state": state}
     except Exception as e:
+        logger.error(f"Error getting state for relay_id: {relay_id} - {str(e)}")
         raise HTTPException(status_code=400, detail={"error": str(e)})
 
 
 @router.post("/{relay_id}/on", dependencies=[Depends(is_authenticated)])
 async def turn_single_relay_on(relay_id: str, request: Request) -> Dict[str, Any]:
-    """
-    POST /api/relays/{relay_id}/on
-    
-    Example Request:
-      POST http://localhost:8000/api/relays/relay_1/on
-      Headers: { Authorization: "Bearer <your_token>" }
-    
-    Turns on the specified relay.
-    """
+    logger.info(f"Received request to turn on relay_id: {relay_id}")
     controller = RELAY_CONTROLLERS.get(relay_id)
     if not controller:
+        logger.warning(f"Relay not found: {relay_id}")
         raise HTTPException(status_code=404, detail="Relay not found")
     try:
         await controller.turn_on()
         state = await controller.device_state()
         update_dynamic_config(request, relay_id, state)
+        logger.info(f"Turned on relay_id: {relay_id} with state: {state}")
         return {"relayId": relay_id, "state": state}
     except Exception as e:
         current_state = await controller.device_state()
+        logger.error(f"Error turning on relay_id: {relay_id} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": str(e), "state": current_state})
 
 
 @router.post("/{relay_id}/off", dependencies=[Depends(is_authenticated)])
 async def turn_single_relay_off(relay_id: str, request: Request) -> Dict[str, Any]:
-    """
-    POST /api/relays/{relay_id}/off
-    
-    Example Request:
-      POST http://localhost:8000/api/relays/relay_1/off
-      Headers: { Authorization: "Bearer <your_token>" }
-    
-    Turns off the specified relay.
-    """
+    logger.info(f"Received request to turn off relay_id: {relay_id}")
     controller = RELAY_CONTROLLERS.get(relay_id)
     if not controller:
+        logger.warning(f"Relay not found: {relay_id}")
         raise HTTPException(status_code=404, detail="Relay not found")
     try:
         await controller.turn_off()
         state = await controller.device_state()
         update_dynamic_config(request, relay_id, state)
+        logger.info(f"Turned off relay_id: {relay_id} with state: {state}")
         return {"relayId": relay_id, "state": state}
     except Exception as e:
         current_state = await controller.device_state()
+        logger.error(f"Error turning off relay_id: {relay_id} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": str(e), "state": current_state})
 
 
 @router.post("/{relay_id}/pulse", dependencies=[Depends(is_authenticated)])
 async def pulse_single_relay(relay_id: str, request: Request) -> Dict[str, Any]:
-    """
-    POST /api/relays/{relay_id}/pulse
-    
-    Example Request:
-      POST http://localhost:8000/api/relays/relay_1/pulse
-      Headers: { Authorization: "Bearer <your_token>" }
-    
-    Pulses the specified relay for its configured duration.
-    """
+    logger.info(f"Received request to pulse relay_id: {relay_id}")
     controller = RELAY_CONTROLLERS.get(relay_id)
     if not controller:
+        logger.warning(f"Relay not found: {relay_id}")
         raise HTTPException(status_code=404, detail="Relay not found")
     try:
         # Get dynamic pulse_time from app.state.config if available.
@@ -267,7 +213,9 @@ async def pulse_single_relay(relay_id: str, request: Request) -> Dict[str, Any]:
         await controller.pulse(duration)
         state = await controller.device_state()
         update_dynamic_config(request, relay_id, state)
+        logger.info(f"Pulsed relay_id: {relay_id} for duration: {duration} with state: {state}")
         return {"relayId": relay_id, "state": state}
     except Exception as e:
         current_state = await controller.device_state()
+        logger.error(f"Error pulsing relay_id: {relay_id} - {str(e)}")
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error": str(e), "state": current_state})

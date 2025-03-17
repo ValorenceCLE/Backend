@@ -6,16 +6,12 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-try: 
-    from app.utils.config import settings
-    from app.api.auth import router as auth_router
-    from app.api.admin import router as admin_router
-    from app.api.relays import router as relay_router
-except ImportError:
-    from utils.config import settings
-    from api.auth import router as auth_router
-    from api.admin import router as admin_router
-    from api.relays import router as relay_router
+
+from app.utils.config import settings
+from app.api.auth import router as auth_router
+from app.api.admin import router as admin_router
+from app.api.relays import router as relay_router
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
