@@ -1,12 +1,20 @@
 import asyncio
-from fastapi import APIRouter, HTTPException, status, BackgroundTasks, Body
+import logging
+from fastapi import APIRouter, HTTPException, status, Request, Depends
 from app.services.controller import RelayControl
+from app.utils.dependencies import require_role, is_authenticated
 
-router = APIRouter(prefix="/io", tags=["Relay API"])
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+router = APIRouter(
+    prefix="/io",
+    tags=["Relay API"]
+)
 
 def get_controller(relay_id: str) -> RelayControl:
     """
-    Instantiate a RelayControl for the given relay_id, handling errors.
+    Instantiate a RelayControl for the given relay_id.
     """
     try:
         return RelayControl(relay_id)
@@ -15,9 +23,9 @@ def get_controller(relay_id: str) -> RelayControl:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
-async def _pulse(controller: RelayControl, pulse_time: int) -> None:
+async def _pulse(controller: RelayControl, pulse_time) -> None:
     """
-    Toggle the relay state to start the pulse, wait for the specified duration,
+    Toggle the relay state to start the pulse, wait for the stored pulse_time,
     then toggle again to restore the original state.
     """
     try:
@@ -25,8 +33,10 @@ async def _pulse(controller: RelayControl, pulse_time: int) -> None:
         await asyncio.sleep(pulse_time)
         await controller.toggle()
     except Exception as e:
-        # Log or handle errors appropriately.
-        pass
+        # Log the error as needed.
+        logger.exception(
+            f"Error during pulse operation for relay '{controller.id}': {e}"
+        )
 
 @router.post("/{relay_id}/state/on")
 async def turn_relay_on(relay_id: str) -> dict:
@@ -42,7 +52,7 @@ async def turn_relay_on(relay_id: str) -> dict:
         )
     return {"status": "success", "state": result.get("state")}
 
-@router.post("/{relay_id}/state/off")
+@router.post("/{relay_id}/state/off", dependencies=[Depends(require_role(["admin", "user"]))])
 async def turn_relay_off(relay_id: str) -> dict:
     """
     Turn the specified relay OFF.
@@ -56,23 +66,63 @@ async def turn_relay_off(relay_id: str) -> dict:
         )
     return {"status": "success", "state": result.get("state")}
 
-@router.post("/{relay_id}/state/pulse")
-async def pulse_relay(
-    relay_id: str,
-    background_tasks: BackgroundTasks,
-    pulse_time: int = Body(..., embed=True, description="Pulse duration in seconds")
-) -> dict:
+@router.post("/{relay_id}/state/pulse", dependencies=[Depends(require_role(["admin", "user"]))])
+async def pulse_relay(relay_id: str, request: Request) -> dict:
     """
-    Pulse the specified relay by toggling its state for a short duration.
-    Uses the RelayControl's toggle() method to invert the state,
-    waits for the specified duration, then toggles again to restore.
-    The pulse operation runs in the background.
+    Pulse the specified relay by toggling its state for the stored pulse duration.
+    The pulse operation is scheduled as an asyncio task so that the request returns immediately.
     """
+    relay_config = next(
+        (relay for relay in request.app.state.config.get("relays", []) if relay.get("id") == relay_id),
+        None
+    )
+    if not relay_config:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Relay with ID '{relay_id}' not found in configuration."
+        )
+    pulse_time = relay_config.get("pulse_time", 5)
     controller = get_controller(relay_id)
     initial_state = controller.state
-    background_tasks.add_task(_pulse, controller, pulse_time)
+    asyncio.create_task(_pulse(controller, pulse_time))
     return {
         "status": "success",
-        "pulse_time": pulse_time,
-        "initial_state": initial_state,
+        "duration": pulse_time,
+        "state": initial_state,
     }
+
+@router.get("/relays/state", dependencies=[Depends(require_role(["admin", "user"]))])
+async def get_all_relay_states(request: Request) -> dict:
+    """
+    Retrieve the current state of all relays.
+    """
+    try:
+        states = {}
+        for relay in request.app.state.config.get("relays", []):
+            relay_id = relay.get("id")
+            if relay_id:
+                controller = get_controller(relay_id)
+                states[relay_id] = controller.state
+        return states
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
+    
+@router.get("/relays/enabled/state")
+async def enabled_relay_states(request: Request) -> dict:
+    """
+    Retrieve the current state of all enabled relays.
+    Enabled is a boolean and is set in the config file for each relay object as "enabled".
+    """
+    enabled_relays = [
+        relay for relay in request.app.state.config.get("relays", [])
+        if relay.get("enabled", False)
+    ]
+    states = {}
+    for relay in enabled_relays:
+        relay_id = relay.get("id")
+        if relay_id:
+            controller = get_controller(relay_id)
+            states[relay_id] = controller.state
+    return states

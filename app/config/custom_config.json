@@ -1,6 +1,6 @@
 {
     "general": {
-        "system_name": "eMMc Dev Board",
+        "system_name": "R&D Test System",
         "system_id": "10000000bb6b64b8",
         "version": "1.0.0",
         "agency": "Valorence",
@@ -8,7 +8,7 @@
         "reboot_time": "04:00"
     },
     "network": {
-        "ip_address": "192.168.1.4",
+        "ip_address": "192.168.1.2",
         "subnet_mask": "255.255.255.0",
         "gateway": "192.168.1.1",
         "dhcp": true,
@@ -35,16 +35,13 @@
             "example email"
         ]
     },
-    "relays": {
-        "relay_1": {
+    "relays": [
+        {
             "id": "relay_1",
             "name": "Router",
             "enabled": true,
-            "state": "on",
-            "boot_state": "on",
             "pulse_time": 5,
             "schedule": {
-                "enabled": true,
                 "on_time": "00:00",
                 "off_time": "23:59",
                 "days_mask": 254
@@ -70,13 +67,11 @@
                 }
             }
         },
-        "relay_2": {
+        {
             "id": "relay_2",
             "name": "Camera",
             "enabled": true,
-            "state": "off",
-            "boot_state": "on",
-            "pulse_time": 5,
+            "pulse_time": 10,
             "schedule": {
                 "enabled": true,
                 "on_time": "00:00",
@@ -104,13 +99,11 @@
                 }
             }
         },
-        "relay_3": {
+        {
             "id": "relay_3",
             "name": "Fan",
             "enabled": true,
-            "state": "on",
-            "boot_state": "on",
-            "pulse_time": 5,
+            "pulse_time": 360,
             "schedule": {
                 "enabled": true,
                 "on_time": "04:59",
@@ -138,13 +131,11 @@
                 }
             }
         },
-        "relay_4": {
+        {
             "id": "relay_4",
             "name": "IR Light",
             "enabled": true,
-            "state": "on",
-            "boot_state": "on",
-            "pulse_time": 5,
+            "pulse_time": 60,
             "schedule": {
                 "enabled": true,
                 "on_time": "18:00",
@@ -172,13 +163,11 @@
                 }
             }
         },
-        "relay_5": {
+        {
             "id": "relay_5",
             "name": "Strobe Light",
             "enabled": true,
-            "state": "off",
-            "boot_state": "on",
-            "pulse_time": 5,
+            "pulse_time": 360,
             "schedule": {
                 "enabled": true,
                 "on_time": "18:00",
@@ -206,12 +195,10 @@
                 }
             }
         },
-        "relay_6": {
+        {
             "id": "relay_6",
             "name": "Aux 1",
             "enabled": false,
-            "state": "on",
-            "boot_state": "on",
             "pulse_time": 5,
             "schedule": {
                 "enabled": false,
@@ -238,7 +225,7 @@
                 }
             }
         }
-    },
+    ],
     "tasks": {
         "1": {
             "name": "Test",

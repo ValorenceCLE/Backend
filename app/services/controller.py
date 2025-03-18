@@ -27,7 +27,7 @@ class RelayControl:
             raise ValueError(error_msg)
         self.pin: int = self.config["pin"]
         self._setup_relay()
-        logger.info(
+        logger.debug(
             f"Relay '{self.id}' initialized on pin {self.pin} with state: "
             f"{'ON' if self.state == 1 else 'OFF'}"
         )
@@ -97,7 +97,7 @@ class RelayControl:
         try:
             value = self.request.get_value(self.pin)
             state_value = 1 if value == Value.ACTIVE else 0
-            logger.info(
+            logger.debug(
                 f"Relay '{self.id}' current state read as: {'ON' if state_value == 1 else 'OFF'}"
             )
             return state_value

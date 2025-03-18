@@ -37,7 +37,6 @@
             "id": "relay_1",
             "name": "Router",
             "enabled": true,
-            "boot_state": "on",
             "pulse_time": 5,
             "schedule": {
                 "on_time": "00:00",
@@ -69,7 +68,6 @@
             "id": "relay_2",
             "name": "Camera",
             "enabled": true,
-            "boot_state": "on",
             "pulse_time": 10,
             "schedule": {
                 "enabled": true,
@@ -102,7 +100,6 @@
             "id": "relay_3",
             "name": "Fan",
             "enabled": true,
-            "boot_state": "on",
             "pulse_time": 360,
             "schedule": {
                 "enabled": true,
@@ -135,7 +132,6 @@
             "id": "relay_4",
             "name": "IR Light",
             "enabled": true,
-            "boot_state": "on",
             "pulse_time": 60,
             "schedule": {
                 "enabled": true,
@@ -168,7 +164,6 @@
             "id": "relay_5",
             "name": "Strobe Light",
             "enabled": true,
-            "boot_state": "on",
             "pulse_time": 360,
             "schedule": {
                 "enabled": true,
@@ -201,7 +196,6 @@
             "id": "relay_6",
             "name": "Aux 1",
             "enabled": false,
-            "boot_state": "on",
             "pulse_time": 5,
             "schedule": {
                 "enabled": false,
