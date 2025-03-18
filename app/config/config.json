@@ -30,21 +30,16 @@
         "smtp_password": "example password",
         "smtp_secure": "tls",
         "return_email": "example email",
-        "emails": [
-            "example email",
-            "example email"
-        ]
+        "emails": ["example email","example email"]
     },
-    "relays": {
-        "1": {
-            "relayId": "relay_1",
+    "relays": [
+        {
+            "id": "relay_1",
             "name": "Router",
             "enabled": true,
-            "state": "on",
             "boot_state": "on",
             "pulse_time": 5,
             "schedule": {
-                "enabled": true,
                 "on_time": "00:00",
                 "off_time": "23:59",
                 "days_mask": 254
@@ -70,11 +65,10 @@
                 }
             }
         },
-        "2": {
-            "relayId": "relay_2",
+        {
+            "id": "relay_2",
             "name": "Camera",
             "enabled": true,
-            "state": "on",
             "boot_state": "on",
             "pulse_time": 10,
             "schedule": {
@@ -104,11 +98,10 @@
                 }
             }
         },
-        "3": {
-            "relayId": "relay_3",
+        {
+            "id": "relay_3",
             "name": "Fan",
             "enabled": true,
-            "state": "on",
             "boot_state": "on",
             "pulse_time": 360,
             "schedule": {
@@ -138,11 +131,10 @@
                 }
             }
         },
-        "4": {
-            "relayId": "relay_4",
+        {
+            "id": "relay_4",
             "name": "IR Light",
             "enabled": true,
-            "state": "on",
             "boot_state": "on",
             "pulse_time": 60,
             "schedule": {
@@ -172,11 +164,10 @@
                 }
             }
         },
-        "5": {
-            "relayId": "relay_5",
+        {
+            "id": "relay_5",
             "name": "Strobe Light",
             "enabled": true,
-            "state": "on",
             "boot_state": "on",
             "pulse_time": 360,
             "schedule": {
@@ -206,11 +197,10 @@
                 }
             }
         },
-        "6": {
-            "relayId": "relay_6",
+        {
+            "id": "relay_6",
             "name": "Aux 1",
             "enabled": false,
-            "state": "on",
             "boot_state": "on",
             "pulse_time": 5,
             "schedule": {
@@ -238,7 +228,7 @@
                 }
             }
         }
-    },
+    ],
     "tasks": {
         "1": {
 

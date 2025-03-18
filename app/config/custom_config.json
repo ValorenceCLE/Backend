@@ -74,7 +74,7 @@
             "id": "relay_2",
             "name": "Camera",
             "enabled": true,
-            "state": "on",
+            "state": "off",
             "boot_state": "on",
             "pulse_time": 5,
             "schedule": {

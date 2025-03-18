@@ -6,12 +6,10 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-
 from app.utils.config import settings
 from app.api.auth import router as auth_router
 from app.api.admin import router as admin_router
-from app.api.relays import router as relay_router
-
+from app.api.relay import router as relay_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,7 +45,6 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
 app.include_router(auth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(relay_router, prefix="/api")
-
 
 if __name__ == "__main__":
     uvicorn.run(
