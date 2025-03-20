@@ -48,14 +48,14 @@
             },
             "dashboard": {
                 "on_button": {
-                    "show": false,
-                    "status_text": "ON",
+                    "show": true,
+                    "status_text": "On",
                     "status_color": "green",
                     "button_label": "On"
                 },
                 "off_button": {
-                    "show": false,
-                    "status_text": "OFF",
+                    "show": true,
+                    "status_text": "Off",
                     "status_color": "red",
                     "button_label": "Off"
                 },
@@ -81,13 +81,13 @@
             "dashboard": {
                 "on_button": {
                     "show": true,
-                    "status_text": "ON",
+                    "status_text": "On",
                     "status_color": "green",
                     "button_label": "On"
                 },
                 "off_button": {
                     "show": true,
-                    "status_text": "OFF",
+                    "status_text": "Off",
                     "status_color": "red",
                     "button_label": "Off"
                 },
@@ -145,21 +145,21 @@
             "dashboard": {
                 "on_button": {
                     "show": true,
-                    "status_text": "ON",
+                    "status_text": "On",
                     "status_color": "red",
                     "button_label": "On"
                 },
                 "off_button": {
                     "show": true,
-                    "status_text": "OFF",
+                    "status_text": "Off",
                     "status_color": "green",
                     "button_label": "Off"
                 },
                 "pulse_button": {
-                    "show": false,
-                    "status_text": "Restarting...",
+                    "show": true,
+                    "status_text": "Toggling...",
                     "status_color": "yellow",
-                    "button_label": "Restart"
+                    "button_label": "Toggle"
                 }
             }
         },
@@ -177,29 +177,29 @@
             "dashboard": {
                 "on_button": {
                     "show": true,
-                    "status_text": "ON",
+                    "status_text": "On",
                     "status_color": "red",
                     "button_label": "On"
                 },
                 "off_button": {
                     "show": true,
-                    "status_text": "OFF",
+                    "status_text": "Off",
                     "status_color": "green",
                     "button_label": "Off"
                 },
                 "pulse_button": {
                     "show": true,
-                    "status_text": "ON",
-                    "status_color": "blue",
-                    "button_label": "Run 5 Min."
+                    "status_text": "Running...",
+                    "status_color": "yellow",
+                    "button_label": "Run"
                 }
             }
         },
         {
             "id": "relay_6",
             "name": "Aux 1",
-            "enabled": false,
-            "pulse_time": 5,
+            "enabled": true,
+            "pulse_time": 15,
             "schedule": {
                 "enabled": false,
                 "days_mask": 0
@@ -218,10 +218,10 @@
                     "button_label": "Off"
                 },
                 "pulse_button": {
-                    "show": false,
-                    "status_text": "Restarting...",
+                    "show": true,
+                    "status_text": "Toggling...",
                     "status_color": "yellow",
-                    "button_label": "Restart"
+                    "button_label": "Toggle"
                 }
             }
         }

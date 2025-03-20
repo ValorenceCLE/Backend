@@ -8,7 +8,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from app.utils.config import settings
 from app.api.auth import router as auth_router
-from app.api.admin import router as admin_router
+from app.api.configuration import router as config_router
 from app.api.relay import router as relay_router
 
 @asynccontextmanager
@@ -43,7 +43,7 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
 
 # Routers
 app.include_router(auth_router, prefix="/api")
-app.include_router(admin_router, prefix="/api")
+app.include_router(config_router, prefix="/api")
 app.include_router(relay_router, prefix="/api")
 
 if __name__ == "__main__":
