@@ -27,6 +27,7 @@ lgpio==0.2.2.0
 multidict==6.1.0
 passlib==1.7.4
 propcache==0.3.0
+psutil==7.0.0
 pyasn1==0.4.8
 pycares==4.5.0
 pycparser==2.22
@@ -47,4 +48,5 @@ starlette==0.45.3
 typing_extensions==4.12.2
 urllib3==2.3.0
 uvicorn==0.34.0
+websockets==15.0.1
 yarl==1.18.3
