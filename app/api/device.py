@@ -57,6 +57,7 @@ LOG_FILES = {
     "router": "/var/log/router.log"
 }
 
+
 @router.get("/logs/camera", dependencies=[Depends(require_role("admin"))])
 async def get_camera_log():
     """

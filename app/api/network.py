@@ -5,6 +5,7 @@ from typing import Dict
 from fastapi import APIRouter, Query, Depends
 from fastapi.responses import StreamingResponse
 from app.utils.dependencies import is_authenticated
+import speedtest
 from app.services.ping import (
     ping_hosts,
     is_host_online,
@@ -65,3 +66,16 @@ async def host_online(
 ):
     result = await is_host_online(host, retries=retries, timeout=timeout, fallback_port=port)
     return result
+
+@router.get("/speedtest")
+async def speedtest_endpoint():
+    loop = asyncio.get_event_loop()
+    results = await loop.run_in_executor(None, perform_speedtest)
+    return results
+
+def perform_speedtest():
+    s = speedtest.Speedtest()
+    s.get_best_server()
+    s.download()
+    s.upload()
+    return s.results.dict()
