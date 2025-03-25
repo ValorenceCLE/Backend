@@ -2,9 +2,9 @@ import asyncio
 import json
 import logging
 from typing import Dict
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from fastapi.responses import StreamingResponse
-from app.utils.dependencies import require_role, is_authenticated
+from app.utils.dependencies import is_authenticated
 from app.services.ping import (
     ping_hosts,
     is_host_online,
@@ -26,7 +26,7 @@ router = APIRouter(
 ping_tasks: Dict[str, asyncio.Task] = {}
 
 # --- /ping (batch) ---
-@router.get("/ping")
+@router.get("/ping", dependencies=[Depends(is_authenticated)])
 async def ping_endpoint(
     hosts: str = Query(..., description="Comma-separated hostnames/IPs"),
     retries: int = 2,
@@ -45,7 +45,7 @@ async def ping_endpoint(
 
 
 # --- /stream-ping (real-time via Server-Sent Events) ---
-@router.get("/stream-ping")
+@router.get("/stream-ping", dependencies=[Depends(is_authenticated)])
 async def stream_ping(host: str, interval: int = 2):
     async def event_stream():
         while True:
@@ -56,7 +56,7 @@ async def stream_ping(host: str, interval: int = 2):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-@router.get("/host/status")
+@router.get("/host/status", dependencies=[Depends(is_authenticated)])
 async def host_online(
     host: str = Query(..., description="Hostname or IP address to check"),
     retries: int = 2,

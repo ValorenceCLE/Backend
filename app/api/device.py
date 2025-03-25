@@ -1,8 +1,10 @@
 import asyncio
 import psutil
 from fastapi.responses import FileResponse
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from concurrent.futures import ThreadPoolExecutor
+import os
+from app.utils.dependencies import require_role, is_authenticated
 
 router = APIRouter(prefix="/device", tags=["Device API"])
 executor = ThreadPoolExecutor()
@@ -38,20 +40,24 @@ async def websocket_usage(websocket: WebSocket):
                 "disk": disk,
             }
             await websocket.send_json(usage_data)
-            await asyncio.sleep(1)  # Stream data every second
+            await asyncio.sleep(3)  # Stream data every 3 seconds
     except WebSocketDisconnect:
         print("WebSocket connection closed: Client disconnected.")
     except Exception as e:
         print(f"WebSocket connection closed due to error: {e}")
     finally:
-        await websocket.close()
+        try:
+            await websocket.close()
+        except RuntimeError as e:
+            # Already closed; ignore the error.
+            print(f"Ignored error on websocket close: {e}")
 
 LOG_FILES = {
     "camera": "/var/log/camera.log",
     "router": "/var/log/router.log"
 }
 
-@router.get("/logs/camera")
+@router.get("/logs/camera", dependencies=[Depends(require_role("admin"))])
 async def get_camera_log():
     """
     Endpoint to download the camera log file.
@@ -66,7 +72,7 @@ async def get_camera_log():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/logs/router")
+@router.get("/logs/router", dependencies=[Depends(require_role("admin"))])
 async def get_router_log():
     """
     Endpoint to download the router log file.
@@ -79,21 +85,28 @@ async def get_router_log():
         return FileResponse(log_path, filename="router.log", media_type="application/octet-stream")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
 
-@router.post("/reboot")
+
+@router.post("/reboot", dependencies=[Depends(require_role("admin"))])
 async def reboot_device():
     """
     Endpoint to reboot the device.
     """
     try:
-        # Perform device reboot
+        # Send response before rebooting
+        asyncio.create_task(reboot_system())
         return {"message": "Device rebooted successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+async def reboot_system():
+    """
+    Perform the actual reboot after sending the response.
+    """
+    await asyncio.sleep(1)  # Small delay to ensure response is sent
+    os.system("sudo reboot")
 
-@router.post("/power-cycle")
+@router.post("/power-cycle", dependencies=[Depends(require_role("admin"))])
 async def power_cycle_device():
     """
     Endpoint to power cycle the device.
@@ -103,7 +116,12 @@ async def power_cycle_device():
         return {"message": "Device power cycled successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-@router.post("/restore-defaults")
+
+
+@router.post("/restore-defaults", dependencies=[Depends(require_role("admin"))])
 async def restore_defaults():
+    """
+    Endpoint to restore the device to default settings.
+    """
     pass
+    # Copy the default config over the custom config

@@ -115,7 +115,7 @@ async def get_all_relay_states(request: Request) -> dict:
         )
 
 
-@router.get("/relays/enabled/state")
+@router.get("/relays/enabled/state", dependencies=[Depends(require_role(["admin", "user"]))])
 async def enabled_relay_states(request: Request) -> dict:
     """
     Retrieve the current state of all enabled relays.
