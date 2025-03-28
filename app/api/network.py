@@ -2,9 +2,9 @@ import asyncio
 import json
 import logging
 from typing import Dict
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
-from app.utils.dependencies import is_authenticated
+# from app.utils.dependencies import is_authenticated
 import speedtest
 from app.services.ping import (
     ping_hosts,
@@ -74,8 +74,13 @@ async def speedtest_endpoint():
     return results
 
 def perform_speedtest():
-    s = speedtest.Speedtest()
-    s.get_best_server()
-    s.download()
-    s.upload()
-    return s.results.dict()
+    try:
+        s = speedtest.Speedtest()
+        s.get_best_server()
+        s.download()
+        s.upload()
+        return s.results.dict()
+    except speedtest.ConfigRetrievalError as e:
+        logger.error(f"Speedtest configuration retrieval failed: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error during speedtest: {e}")

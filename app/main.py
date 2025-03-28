@@ -14,6 +14,7 @@ from app.api.configuration import router as config_router
 from app.api.relay import router as relay_router
 from app.api.network import router as network_router
 from app.api.device import router as device_router
+from app.api.sensors import router as sensors_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -51,6 +52,7 @@ app.include_router(config_router, prefix="/api")
 app.include_router(relay_router, prefix="/api")
 app.include_router(network_router, prefix="/api")
 app.include_router(device_router, prefix="/api")
+app.include_router(sensors_router, prefix="/api")
 
 if __name__ == "__main__":
     uvicorn.run(

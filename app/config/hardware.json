@@ -1,0 +1,45 @@
+{
+    "ina260_sensors": [
+        {
+            "id": "ina260_1",
+            "relay": "relay_1",
+            "address": "0x44"
+        },
+        {
+            "id": "ina260_2",
+            "relay": "relay_2",
+            "address": "0x45"
+        },
+        {
+            "id": "ina260_3",
+            "relay": "relay_3",
+            "address": "0x46"
+        },
+        {
+            "id": "ina260_4",
+            "relay": "relay_4",
+            "address": "0x47"
+        },
+        {
+            "id": "ina260_5",
+            "relay": "relay_5",
+            "address": "0x48"
+        },
+        {
+            "id": "ina260_6",
+            "relay": "relay_6",
+            "address": "0x49"
+        },
+        {
+            "id": "ina260_7",
+            "relay": "main",
+            "address": "0x4B"
+        }
+    ],
+    "sht30_sensors": [
+        {
+            "id": "sht30_1",
+            "address": "0x45"
+        }
+    ]
+}

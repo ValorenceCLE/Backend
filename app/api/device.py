@@ -106,23 +106,3 @@ async def reboot_system():
     """
     await asyncio.sleep(1)  # Small delay to ensure response is sent
     os.system("sudo reboot")
-
-@router.post("/power-cycle", dependencies=[Depends(require_role("admin"))])
-async def power_cycle_device():
-    """
-    Endpoint to power cycle the device.
-    """
-    try:
-        # Perform device power cycle
-        return {"message": "Device power cycled successfully."}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/restore-defaults", dependencies=[Depends(require_role("admin"))])
-async def restore_defaults():
-    """
-    Endpoint to restore the device to default settings.
-    """
-    pass
-    # Copy the default config over the custom config

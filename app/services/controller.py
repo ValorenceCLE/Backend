@@ -23,13 +23,13 @@ class RelayControl:
 
     # Embedded hardware configuration; easier access and maintenance.
     _hardware_config: Dict[str, Dict[str, Any]] = {
-        "relay_1": {"pin": 23, "normally": "open"},
-        "relay_2": {"pin": 24, "normally": "open"},
-        "relay_3": {"pin": 4,  "normally": "open"},
-        "relay_4": {"pin": 17, "normally": "open"},
-        "relay_5": {"pin": 27, "normally": "open"},
-        "relay_6": {"pin": 22, "normally": "open"},
-    }
+    "relay_1": {"pin": 22, "normally": "closed"},  # Camera Disable
+    "relay_2": {"pin": 27, "normally": "closed"},  # Router Disable
+    "relay_3": {"pin": 17, "normally": "open"},  # Enable
+    "relay_4": {"pin": 4,  "normally": "open"},  # Enable
+    "relay_5": {"pin": 24, "normally": "open"},  # Enable
+    "relay_6": {"pin": 23, "normally": "open"},  # Fan Enable
+    }   
 
     def __new__(cls, relay_id: str, *args, **kwargs):
         if relay_id in cls._instances:
@@ -57,6 +57,7 @@ class RelayControl:
             f"{'ON' if self.state == 1 else 'OFF'} (normally {self.normally})"
         )
         self._initialized = True
+        self._lock = asyncio.Lock()
 
     def _get_hardware_info(self) -> Optional[Dict[str, Any]]:
         """
@@ -190,14 +191,16 @@ class RelayControl:
         Asynchronously turn the relay logical state ON.
         """
         logger.info(f"Turning relay '{self.id}' ON.")
-        return await asyncio.to_thread(self._change_state, 1)
+        async with self._lock:
+            return await asyncio.to_thread(self._change_state, 1)
 
     async def turn_off(self) -> Dict[str, Any]:
         """
         Asynchronously turn the relay logical state OFF.
         """
         logger.info(f"Turning relay '{self.id}' OFF.")
-        return await asyncio.to_thread(self._change_state, 0)
+        async with self._lock:
+            return await asyncio.to_thread(self._change_state, 0)
 
     async def toggle(self) -> Dict[str, Any]:
         """
