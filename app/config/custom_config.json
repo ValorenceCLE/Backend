@@ -228,6 +228,7 @@
     ],
     "tasks": {
         "1": {
+            "id": "1",
             "name": "Test",
             "source": "relay_1",
             "field": "volts",
@@ -238,14 +239,11 @@
                     "type": "io",
                     "target": "relay_1",
                     "state": "on"
-                },
-                {
-                    "type": "email",
-                    "message": "Test message"
                 }
             ]
         },
         "2": {
+            "id": "2",
             "name": "Test 2",
             "source": "relay_2",
             "field": "volts",
@@ -256,10 +254,6 @@
                     "type": "io",
                     "target": "relay_2",
                     "state": "off"
-                },
-                {
-                    "type": "email",
-                    "message": "Test message 2"
                 }
             ]
         }
