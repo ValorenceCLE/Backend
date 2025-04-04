@@ -1,12 +1,4 @@
-Adafruit-Blinka==8.56.0
-adafruit-circuitpython-busdevice==5.2.11
-adafruit-circuitpython-connectionmanager==3.1.3
-adafruit-circuitpython-ina260==1.3.17
-adafruit-circuitpython-register==1.10.2
-adafruit-circuitpython-requests==4.1.10
-adafruit-circuitpython-typing==1.11.2
-Adafruit-PlatformDetect==3.77.0
-Adafruit-PureIO==1.1.11
+
 aiodns==3.2.0
 aiofiles==24.1.0
 aiohappyeyeballs==2.6.1
@@ -18,8 +10,6 @@ anyio==4.8.0
 async-timeout==5.0.1
 attrs==25.3.0
 bcrypt==4.0.1
-binho-host-adapter==0.1.6
-board==1.0
 certifi==2025.1.31
 cffi==1.17.1
 charset-normalizer==3.4.1
@@ -31,7 +21,6 @@ ecdsa==0.19.0
 fastapi==0.115.8
 frozenlist==1.5.0
 gpiod==2.3.0
-gpiozero==2.0.1
 h11==0.14.0
 idna==3.10
 influxdb_client==1.48.0
@@ -57,11 +46,10 @@ pyusb==1.3.1
 PyYAML==6.0.2
 reactivex==4.0.4
 requests==2.32.3
-RPi.GPIO==0.7.1
 rpi_ws281x==5.0.0
 rsa==4.9
 six==1.17.0
-smbus2==0.3.0
+smbus2==0.5.0
 sniffio==1.3.1
 speedtest-cli==2.1.3
 starlette==0.45.3

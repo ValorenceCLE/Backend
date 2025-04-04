@@ -13,8 +13,7 @@
         "gateway": "192.168.1.1",
         "dhcp": true,
         "primary_dns": "192.168.1.1",
-        "secondary_dns": "8.8.8.8",
-        "https_port": 443
+        "secondary_dns": "8.8.8.8"
     },
     "date_time": {
         "primary_ntp": "ntp.axis.com",
@@ -38,14 +37,10 @@
     "relays": [
         {
             "id": "relay_1",
-            "name": "Router",
+            "name": "Camera",
             "enabled": true,
             "pulse_time": 5,
-            "schedule": {
-                "on_time": "00:00",
-                "off_time": "23:59",
-                "days_mask": 254
-            },
+            "schedule": false,
             "dashboard": {
                 "on_button": {
                     "show": true,
@@ -69,15 +64,10 @@
         },
         {
             "id": "relay_2",
-            "name": "Camera",
+            "name": "Router",
             "enabled": true,
-            "pulse_time": 10,
-            "schedule": {
-                "enabled": true,
-                "on_time": "00:00",
-                "off_time": "23:59",
-                "days_mask": 254
-            },
+            "pulse_time": 5,
+            "schedule": false,
             "dashboard": {
                 "on_button": {
                     "show": true,
@@ -200,10 +190,7 @@
             "name": "Aux 1",
             "enabled": true,
             "pulse_time": 15,
-            "schedule": {
-                "enabled": false,
-                "days_mask": 0
-            },
+            "schedule": false,
             "dashboard": {
                 "on_button": {
                     "show": true,
@@ -236,12 +223,8 @@
             "actions": [
                 {
                     "type": "io",
-                    "target": "relay_1",
+                    "target": "relay_3",
                     "state": "on"
-                },
-                {
-                    "type": "email",
-                    "message": "Test message"
                 }
             ]
         },
@@ -256,12 +239,8 @@
                     "type": "io",
                     "target": "relay_2",
                     "state": "off"
-                },
-                {
-                    "type": "email",
-                    "message": "Test message 2"
                 }
             ]
         }
     }
-}
+  }
