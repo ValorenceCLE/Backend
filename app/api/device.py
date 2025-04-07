@@ -1,10 +1,10 @@
 import asyncio
 import psutil
 from fastapi.responses import FileResponse
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query, status
 from concurrent.futures import ThreadPoolExecutor
 import os
-from app.utils.dependencies import require_role, is_authenticated
+from app.utils.dependencies import require_role, is_authenticated, verify_token_ws
 
 router = APIRouter(prefix="/device", tags=["Device API"])
 executor = ThreadPoolExecutor()
@@ -26,9 +26,22 @@ async def get_disk_usage():
     return await loop.run_in_executor(executor, lambda: psutil.disk_usage("/").percent)
 
 @router.websocket("/usage")
-async def websocket_usage(websocket: WebSocket):
-    """WebSocket endpoint to stream system usage metrics."""
+async def websocket_usage(
+    websocket: WebSocket, 
+    token: str = Query(None)
+):
+    """WebSocket endpoint to stream system usage metrics with optional authentication."""
     await websocket.accept()
+    
+    # Optional authentication check
+    if token:
+        try:
+            await verify_token_ws(token)
+        except HTTPException as e:
+            await websocket.send_text(f"Authentication failed: {e.detail}")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    
     try:
         while True:
             cpu = await get_cpu_usage()
@@ -104,5 +117,5 @@ async def reboot_system():
     """
     Perform the actual reboot after sending the response.
     """
-    await asyncio.sleep(1)  # Small delay to ensure response is sent
+    await asyncio.sleep(0.5)  # Small delay to ensure response is sent
     os.system("sudo reboot")

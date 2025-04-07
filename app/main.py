@@ -30,10 +30,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
-# CORS
+# CORS - Updated for WebSocket support
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:80", "http://localhost:8000", "ws://0.0.0.0", "wss://0.0.0.0", ],
+    # Allow all origins in development; in production you would limit this
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

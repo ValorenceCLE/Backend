@@ -1,7 +1,8 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends, HTTPException, status
 import asyncio
 import logging
-from app.services.smbus import INA260Sensor, SHT30Sensor  # Adjust import paths as needed
+from app.services.smbus import INA260Sensor, SHT30Sensor
+from app.utils.dependencies import verify_token_ws
 
 router = APIRouter(prefix="/sensor", tags=["sensors"])
 logger = logging.getLogger(__name__)
@@ -31,11 +32,26 @@ def get_ina260_config(relay_id: str):
     return None
 
 @router.websocket("/ina260/{relay_id}")
-async def sensor_voltage(websocket: WebSocket, relay_id: str):
+async def sensor_voltage(
+    websocket: WebSocket, 
+    relay_id: str, 
+    token: str = Query(None)
+):
     """
     WebSocket endpoint to stream INA260 sensor data for a given relay_id.
+    Now with optional token authentication.
     """
     await websocket.accept()
+    
+    # Optional authentication check
+    if token:
+        try:
+            await verify_token_ws(token)
+        except HTTPException as e:
+            await websocket.send_text(f"Authentication failed: {e.detail}")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    
     # Look up sensor configuration based on relay_id.
     sensor_config = get_ina260_config(relay_id)
     if sensor_config is None:
@@ -67,13 +83,26 @@ async def sensor_voltage(websocket: WebSocket, relay_id: str):
         await websocket.close()
 
 
-
 @router.websocket("/sht30/environmental")
-async def sensor_env(websocket: WebSocket):
+async def sensor_env(
+    websocket: WebSocket,
+    token: str = Query(None)
+):
     """
     WebSocket endpoint to stream SHT30 sensor data for temperature.
+    Now with optional token authentication.
     """
     await websocket.accept()
+    
+    # Optional authentication check
+    if token:
+        try:
+            await verify_token_ws(token)
+        except HTTPException as e:
+            await websocket.send_text(f"Authentication failed: {e.detail}")
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+    
     try:
         # Create an SHT30Sensor instance.
         sensor = SHT30Sensor()
@@ -96,4 +125,3 @@ async def sensor_env(websocket: WebSocket):
     except Exception as e:
         logger.exception(f"Error in websocket for temperature sensor: {e}")
         await websocket.close()
-
