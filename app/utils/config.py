@@ -5,16 +5,16 @@ from pathlib import Path
 def get_env_path() -> Path:
     try:
         BASE_DIR = Path(__file__).resolve().parents[2]
-        ENV_PATH = BASE_DIR / 'secrets' / 'settings.env'
+        ENV_PATH = BASE_DIR / 'secrets' / 'app.env'  # Changed from settings.env
         if not ENV_PATH.exists():
             # Fallback to common Docker environment paths
-            ENV_PATH = Path('/app/secrets/settings.env')
+            ENV_PATH = Path('/app/secrets/app.env')  # Changed from settings.env
             if not ENV_PATH.exists():
-                ENV_PATH = Path('/app/settings.env')
+                ENV_PATH = Path('/app/app.env')  # Changed from settings.env
 
     except NameError or ValueError or ValidationError:
         BASE_DIR = Path('/app')
-        ENV_PATH = BASE_DIR / 'settings.env'
+        ENV_PATH = BASE_DIR / 'app.env'  # Changed from settings.env
     return ENV_PATH
 
 class Settings(BaseSettings):
