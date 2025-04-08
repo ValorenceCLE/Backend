@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from app.utils.config import settings
+from app.services.influxdb_client import InfluxDBClientService
 
 
 from app.api.auth import router as auth_router
@@ -15,6 +16,7 @@ from app.api.relay import router as relay_router
 from app.api.network import router as network_router
 from app.api.device import router as device_router
 from app.api.sensors import router as sensors_router
+from app.api.timeseries import router as timeseries_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,6 +25,8 @@ async def lifespan(app: FastAPI):
         app.state.config = json.loads(await file.read())
     yield
     # Save config at shutdown
+    influxdb_client = InfluxDBClientService()
+    await influxdb_client.close()
     async with aiofiles.open("app/config/custom_config.json", "w") as file:
         await file.write(json.dumps(app.state.config, indent=4))
 
@@ -54,6 +58,7 @@ app.include_router(relay_router, prefix="/api")
 app.include_router(network_router, prefix="/api")
 app.include_router(device_router, prefix="/api")
 app.include_router(sensors_router, prefix="/api")
+app.include_router(timeseries_router, prefix="/api")
 
 if __name__ == "__main__":
     uvicorn.run(
