@@ -1,49 +1,19 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends, HTTPException, status
 import asyncio
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, Optional, Any
 from app.services.smbus import INA260Sensor, SHT30Sensor
 from app.utils.dependencies import verify_token_ws
+from app.utils.websocket_utils import (
+    ws_manager, 
+    websocket_connection, 
+    safe_send_json, 
+    safe_send_text, 
+    safe_close
+)
 
 router = APIRouter(prefix="/sensor", tags=["sensors"])
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-
-# Connection manager to track active WebSocket connections
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: Dict[str, List[WebSocket]] = {}
-        self.sensor_instances: Dict[str, object] = {}
-    
-    def register_connection(self, key: str, websocket: WebSocket):
-        if key not in self.active_connections:
-            self.active_connections[key] = []
-        self.active_connections[key].append(websocket)
-        logger.debug(f"Registered connection for {key}, total: {len(self.active_connections[key])}")
-    
-    def unregister_connection(self, key: str, websocket: WebSocket):
-        if key in self.active_connections:
-            try:
-                self.active_connections[key].remove(websocket)
-                logger.debug(f"Unregistered connection for {key}, remaining: {len(self.active_connections[key])}")
-            except ValueError:
-                pass
-    
-    def get_sensor(self, sensor_type: str, sensor_id: str, **kwargs):
-        """Get or create a sensor instance"""
-        cache_key = f"{sensor_type}_{sensor_id}"
-        
-        if cache_key not in self.sensor_instances:
-            if sensor_type == "ina260":
-                address = int(kwargs.get("address", "0x0"), 16)
-                self.sensor_instances[cache_key] = INA260Sensor(address)
-            elif sensor_type == "sht30":
-                self.sensor_instances[cache_key] = SHT30Sensor()
-        
-        return self.sensor_instances.get(cache_key)
-
-# Singleton connection manager
-manager = ConnectionManager()
 
 # INA260 sensor configuration
 INA260_CONFIG = {
@@ -56,42 +26,125 @@ INA260_CONFIG = {
     "main": {"address": "0x4B"},
 }
 
-async def safe_send_json(websocket: WebSocket, data):
-    """Send JSON data with proper error handling for closed connections"""
-    try:
-        await websocket.send_json(data)
-        return True
-    except RuntimeError as e:
-        if "close message has been sent" in str(e):
-            # Connection is already closed, no need to send more messages
-            return False
-        raise
-    except Exception as e:
-        logger.error(f"Error sending data: {e}")
-        return False
+class SensorFactory:
+    """Factory for creating and caching sensor instances"""
+    
+    @staticmethod
+    def create_ina260_sensor(relay_id: str) -> Optional[INA260Sensor]:
+        """Create or retrieve a cached INA260 sensor instance"""
+        if relay_id not in INA260_CONFIG:
+            logger.error(f"No configuration found for relay ID: {relay_id}")
+            return None
+            
+        cache_key = f"ina260_{relay_id}"
+        sensor = ws_manager.get_resource(cache_key)
+        
+        if not sensor:
+            try:
+                address = int(INA260_CONFIG[relay_id]["address"], 16)
+                sensor = INA260Sensor(address)
+                ws_manager.store_resource(cache_key, sensor)
+                logger.info(f"Created new INA260 sensor for {relay_id} at {INA260_CONFIG[relay_id]['address']}")
+            except Exception as e:
+                logger.error(f"Failed to create INA260 sensor for {relay_id}: {e}")
+                return None
+                
+        return sensor
+    
+    @staticmethod
+    def create_sht30_sensor() -> Optional[SHT30Sensor]:
+        """Create or retrieve a cached SHT30 sensor instance"""
+        cache_key = "sht30_sensor"
+        sensor = ws_manager.get_resource(cache_key)
+        
+        if not sensor:
+            try:
+                sensor = SHT30Sensor()
+                ws_manager.store_resource(cache_key, sensor)
+                logger.info("Created new SHT30 sensor")
+            except Exception as e:
+                logger.error(f"Failed to create SHT30 sensor: {e}")
+                return None
+                
+        return sensor
 
-async def safe_send_text(websocket: WebSocket, text: str):
-    """Send text with proper error handling for closed connections"""
-    try:
-        await websocket.send_text(text)
-        return True
-    except RuntimeError as e:
-        if "close message has been sent" in str(e):
-            # Connection is already closed, no need to send more messages
+async def handle_authentication(websocket: WebSocket, token: str) -> bool:
+    """Handle optional token authentication for sensor WebSockets"""
+    if token:
+        try:
+            await verify_token_ws(token)
+        except HTTPException as e:
+            await safe_send_text(websocket, f"Authentication failed: {e.detail}")
+            await safe_close(websocket, code=status.WS_1008_POLICY_VIOLATION)
             return False
-        raise
-    except Exception as e:
-        logger.error(f"Error sending text: {e}")
-        return False
+    return True
 
-async def safe_close(websocket: WebSocket, code=status.WS_1000_NORMAL_CLOSURE):
-    """Close WebSocket with proper error handling"""
+async def sensor_data_loop(
+    websocket: WebSocket,
+    sensor_read_func,
+    interval_ms: int,
+    connection_id: str,
+    error_prefix: str
+) -> None:
+    """
+    Generic sensor data streaming loop with error handling
+    
+    Args:
+        websocket: The WebSocket connection
+        sensor_read_func: Async function to read sensor data
+        interval_ms: Update interval in milliseconds
+        connection_id: Identifier for this connection
+        error_prefix: Prefix for error messages
+    """
+    sleep_interval = interval_ms / 1000  # Convert ms to seconds
+    consecutive_errors = 0
+    max_errors = 5
+    
+    logger.info(f"Starting sensor data stream for {connection_id} with {interval_ms}ms interval")
+    
     try:
-        await websocket.close(code=code)
-        return True
+        while True:
+            try:
+                # Read sensor with timeout protection
+                data = await asyncio.wait_for(
+                    sensor_read_func(),
+                    timeout=min(sleep_interval * 0.8, 0.5)  # Timeout slightly less than interval
+                )
+                
+                if data is not None:
+                    # Send data to client
+                    if not await safe_send_json(websocket, data):
+                        # Connection is closed, exit loop
+                        break
+                    consecutive_errors = 0
+                else:
+                    consecutive_errors += 1
+                    logger.warning(f"Empty data for {connection_id}, error count: {consecutive_errors}")
+                    if consecutive_errors >= max_errors:
+                        await safe_send_text(websocket, f"Too many empty readings from {error_prefix}")
+                        break
+                
+            except asyncio.TimeoutError:
+                consecutive_errors += 1
+                logger.warning(f"Timeout reading from {connection_id}, error count: {consecutive_errors}")
+                if consecutive_errors >= max_errors:
+                    await safe_send_text(websocket, f"{error_prefix} communication timeout")
+                    break
+                    
+            except Exception as e:
+                consecutive_errors += 1
+                logger.error(f"Error reading from {connection_id}: {e}")
+                if consecutive_errors >= max_errors:
+                    # Try to send error message, if it fails just exit
+                    await safe_send_text(websocket, f"Disconnecting due to errors")
+                    break
+            
+            # Wait for the next interval
+            await asyncio.sleep(sleep_interval)
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for {connection_id}")
     except Exception as e:
-        logger.debug(f"Error closing websocket (likely already closed): {e}")
-        return False
+        logger.exception(f"Unhandled error in websocket for {connection_id}: {e}")
 
 @router.websocket("/ina260/{relay_id}")
 async def sensor_voltage(
@@ -102,107 +155,54 @@ async def sensor_voltage(
 ):
     """
     WebSocket endpoint to stream INA260 sensor data for a given relay_id.
+    
+    Args:
+        websocket: The WebSocket connection
+        relay_id: Relay ID for the sensor to read
+        token: Optional authentication token
+        interval: Update interval in milliseconds (default: 1000ms)
     """
     connection_id = f"ina260_{relay_id}"
-    is_connected = False
     
-    try:
-        # First accept the connection
-        await websocket.accept()
-        is_connected = True
-        
-        # Optional authentication check
-        if token:
-            try:
-                await verify_token_ws(token)
-            except HTTPException as e:
-                await safe_send_text(websocket, f"Authentication failed: {e.detail}")
-                await safe_close(websocket, code=status.WS_1008_POLICY_VIOLATION)
-                return
-        
-        # Validate relay_id exists in configuration
+    # Define connection initialization
+    async def on_connect(ws):
+        # Authenticate if token provided
+        if not await handle_authentication(ws, token):
+            return False
+            
+        # Validate relay_id exists
         if relay_id not in INA260_CONFIG:
-            await safe_send_text(websocket, f"Unknown relay ID: {relay_id}")
+            await safe_send_text(ws, f"Unknown relay ID: {relay_id}")
+            return False
+            
+        return True
+    
+    # Use the websocket_connection context manager
+    async with websocket_connection(
+        websocket, 
+        ws_manager, 
+        connection_id, 
+        on_connect=on_connect
+    ) as connected:
+        # Exit if connection failed
+        if not connected:
+            return
+        
+        # Get or create the sensor
+        sensor = SensorFactory.create_ina260_sensor(relay_id)
+        if not sensor:
+            await safe_send_text(websocket, f"Failed to initialize sensor for relay {relay_id}")
             await safe_close(websocket)
             return
         
-        # Register connection
-        manager.register_connection(connection_id, websocket)
-        
-        # Get or create sensor
-        try:
-            sensor = manager.get_sensor("ina260", relay_id, address=INA260_CONFIG[relay_id]["address"])
-            if not sensor:
-                await safe_send_text(websocket, f"Failed to initialize sensor for relay {relay_id}")
-                await safe_close(websocket)
-                return
-            
-            logger.info(f"Starting INA260 data stream for {relay_id} with {interval}ms interval")
-        except Exception as e:
-            logger.error(f"Error creating sensor for {relay_id}: {e}")
-            await safe_send_text(websocket, f"Error initializing sensor: {str(e)}")
-            await safe_close(websocket)
-            return
-        
-        # Main data loop
-        consecutive_errors = 0
-        max_errors = 5
-        sleep_interval = interval / 1000  # Convert ms to seconds
-        
-        while is_connected:
-            try:
-                # Read sensor with timeout protection
-                data = await asyncio.wait_for(
-                    sensor.read_all(),
-                    timeout=min(sleep_interval * 0.8, 0.5)  # Timeout slightly less than interval
-                )
-                
-                if data is not None:
-                    # Send data to client
-                    if not await safe_send_json(websocket, data):
-                        # Connection is closed, exit loop
-                        break
-                    consecutive_errors = 0
-                else:
-                    consecutive_errors += 1
-                    logger.warning(f"Empty data from sensor {relay_id}, error count: {consecutive_errors}")
-                    if consecutive_errors >= max_errors:
-                        await safe_send_text(websocket, f"Too many empty readings from sensor {relay_id}")
-                        break
-                
-            except asyncio.TimeoutError:
-                consecutive_errors += 1
-                logger.warning(f"Timeout reading from sensor {relay_id}, error count: {consecutive_errors}")
-                if consecutive_errors >= max_errors:
-                    await safe_send_text(websocket, f"Sensor {relay_id} communication timeout")
-                    break
-                    
-            except WebSocketDisconnect:
-                logger.info(f"WebSocket disconnected for {relay_id}")
-                break
-                
-            except Exception as e:
-                consecutive_errors += 1
-                logger.error(f"Error reading from sensor {relay_id}: {e}")
-                if consecutive_errors >= max_errors:
-                    # Try to send error message, if it fails just exit
-                    await safe_send_text(websocket, f"Disconnecting due to errors")
-                    break
-            
-            # Wait for the next interval
-            await asyncio.sleep(sleep_interval)
-            
-    except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected for {relay_id}")
-    except Exception as e:
-        logger.exception(f"Unhandled error in websocket for {relay_id}: {e}")
-    finally:
-        # Ensure connection is closed and cleaned up
-        if is_connected:
-            await safe_close(websocket)
-        manager.unregister_connection(connection_id, websocket)
-        logger.info(f"Closing INA260 data stream for {relay_id}")
-
+        # Start the sensor data loop
+        await sensor_data_loop(
+            websocket,
+            sensor.read_all,
+            interval,
+            connection_id,
+            f"Sensor {relay_id}"
+        )
 
 @router.websocket("/sht30/environmental")
 async def sensor_env(
@@ -212,106 +212,54 @@ async def sensor_env(
 ):
     """
     WebSocket endpoint to stream SHT30 environmental sensor data.
+    
+    Args:
+        websocket: The WebSocket connection
+        token: Optional authentication token
+        interval: Update interval in milliseconds (default: 1000ms)
     """
     connection_id = "sht30_env"
-    is_connected = False
     
-    try:
-        # First accept the connection
-        await websocket.accept()
-        is_connected = True
+    # Define connection initialization
+    async def on_connect(ws):
+        # Authenticate if token provided
+        if not await handle_authentication(ws, token):
+            return False
+        return True
+    
+    # Use the websocket_connection context manager
+    async with websocket_connection(
+        websocket, 
+        ws_manager, 
+        connection_id, 
+        on_connect=on_connect
+    ) as connected:
+        # Exit if connection failed
+        if not connected:
+            return
         
-        # Optional authentication check
-        if token:
-            try:
-                await verify_token_ws(token)
-            except HTTPException as e:
-                await safe_send_text(websocket, f"Authentication failed: {e.detail}")
-                await safe_close(websocket, code=status.WS_1008_POLICY_VIOLATION)
-                return
+        # Get or create the sensor
+        sensor = SensorFactory.create_sht30_sensor()
+        if not sensor:
+            await safe_send_text(websocket, "Failed to initialize SHT30 sensor")
+            await safe_close(websocket)
+            return
         
-        # Register connection
-        manager.register_connection(connection_id, websocket)
-        
-        # Get or create sensor
+        # Reset the sensor before starting
         try:
-            sensor = manager.get_sensor("sht30", "main")
-            if not sensor:
-                await safe_send_text(websocket, "Failed to initialize SHT30 sensor")
-                await safe_close(websocket)
-                return
-            
-            # Reset the sensor before starting
-            try:
-                await asyncio.wait_for(sensor.reset(), timeout=2.0)
-            except Exception as e:
-                logger.error(f"Error resetting SHT30 sensor: {e}")
-                await safe_send_text(websocket, f"Error initializing sensor: {str(e)}")
-                await safe_close(websocket)
-                return
-                
-            logger.info(f"Starting SHT30 environmental data stream with {interval}ms interval")
+            await asyncio.wait_for(sensor.reset(), timeout=2.0)
+            logger.info("SHT30 sensor reset successful")
         except Exception as e:
-            logger.error(f"Error creating SHT30 sensor: {e}")
+            logger.error(f"Error resetting SHT30 sensor: {e}")
             await safe_send_text(websocket, f"Error initializing sensor: {str(e)}")
             await safe_close(websocket)
             return
         
-        # Main data loop
-        consecutive_errors = 0
-        max_errors = 5
-        sleep_interval = interval / 1000  # Convert ms to seconds
-        
-        while is_connected:
-            try:
-                # Read sensor with timeout protection
-                data = await asyncio.wait_for(
-                    sensor.read_all(),
-                    timeout=min(sleep_interval * 0.8, 0.5)  # Timeout slightly less than interval
-                )
-                
-                if data is not None:
-                    # Send data to client
-                    if not await safe_send_json(websocket, data):
-                        # Connection is closed, exit loop
-                        break
-                    consecutive_errors = 0
-                else:
-                    consecutive_errors += 1
-                    logger.warning(f"Empty data from SHT30 sensor, error count: {consecutive_errors}")
-                    if consecutive_errors >= max_errors:
-                        await safe_send_text(websocket, "Too many empty readings from SHT30 sensor")
-                        break
-                
-            except asyncio.TimeoutError:
-                consecutive_errors += 1
-                logger.warning(f"Timeout reading from SHT30 sensor, error count: {consecutive_errors}")
-                if consecutive_errors >= max_errors:
-                    await safe_send_text(websocket, "SHT30 sensor communication timeout")
-                    break
-                    
-            except WebSocketDisconnect:
-                logger.info("WebSocket disconnected for SHT30 sensor")
-                break
-                
-            except Exception as e:
-                consecutive_errors += 1
-                logger.error(f"Error reading from SHT30 sensor: {e}")
-                if consecutive_errors >= max_errors:
-                    # Try to send error message, if it fails just exit
-                    await safe_send_text(websocket, "Disconnecting due to errors")
-                    break
-            
-            # Wait for the next interval
-            await asyncio.sleep(sleep_interval)
-            
-    except WebSocketDisconnect:
-        logger.info("WebSocket disconnected for SHT30 sensor")
-    except Exception as e:
-        logger.exception(f"Unhandled error in websocket for SHT30 sensor: {e}")
-    finally:
-        # Ensure connection is closed and cleaned up
-        if is_connected:
-            await safe_close(websocket)
-        manager.unregister_connection(connection_id, websocket)
-        logger.info("Closing SHT30 environmental data stream")
+        # Start the sensor data loop
+        await sensor_data_loop(
+            websocket,
+            sensor.read_all,
+            interval,
+            connection_id,
+            "SHT30 sensor"
+        )
