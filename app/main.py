@@ -2,15 +2,14 @@ from contextlib import asynccontextmanager
 import json
 import aiofiles
 import uvicorn
+import ssl
+from pathlib import Path
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from app.utils.config import settings
 from app.services.influxdb_client import InfluxDBClientService
-import ssl
-from pathlib import Path
-import os
 from app.api.auth import router as auth_router
 from app.api.configuration import router as config_router
 from app.api.relay import router as relay_router
@@ -21,17 +20,20 @@ from app.api.timeseries import router as timeseries_router
 
 # SSL Configuration for production
 ssl_context = None
-cert_file = Path("/app/certs/cert.pem")
-key_file = Path("/app/certs/key.pem")
-
+cert_file = Path("/app/certs/deviceCert.crt")  # Using your existing cert file
+key_file = Path("/app/certs/deviceCert.key")   # Using your existing key file
 
 if cert_file.exists() and key_file.exists():
-    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-    ssl_context.load_cert_chain(certfile=cert_file, keyfile=key_file)
-    ssl_context.check_hostname = False
-    print(f"SSL configuration loaded from {cert_file} and {key_file}")
+    try:
+        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        ssl_context.load_cert_chain(certfile=cert_file, keyfile=key_file)
+        ssl_context.check_hostname = False
+        print(f"SSL configuration loaded from {cert_file} and {key_file}")
+    except Exception as e:
+        print(f"Error loading SSL certificates: {e}")
+        ssl_context = None
 else:
-    print("SSL certificates not found, running without SSL")
+    print(f"SSL certificates not found at {cert_file} and {key_file}, running without SSL")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

@@ -27,15 +27,15 @@ FROM python:3.11-slim-bookworm AS runtime
 # Copy venv from builder
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV APP_ENV=production
 # Create app directories
 WORKDIR /app
-RUN mkdir -p /app/scripts /app/certs
-
 # Copy app source code
 COPY . .
 
-RUN chmod +x /app/scripts/entrypoint.sh /app/scripts/generate_certs.sh
+RUN chmod +x /app/scripts/entrypoint.sh
 
 # Expose backend port
 EXPOSE 8000
