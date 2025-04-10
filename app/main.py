@@ -8,8 +8,9 @@ from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from app.utils.config import settings
 from app.services.influxdb_client import InfluxDBClientService
-
-
+import ssl
+from pathlib import Path
+import os
 from app.api.auth import router as auth_router
 from app.api.configuration import router as config_router
 from app.api.relay import router as relay_router
@@ -17,6 +18,20 @@ from app.api.network import router as network_router
 from app.api.device import router as device_router
 from app.api.sensors import router as sensors_router
 from app.api.timeseries import router as timeseries_router
+
+# SSL Configuration for production
+ssl_context = None
+cert_file = Path("/app/certs/cert.pem")
+key_file = Path("/app/certs/key.pem")
+
+
+if cert_file.exists() and key_file.exists():
+    ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    ssl_context.load_cert_chain(certfile=cert_file, keyfile=key_file)
+    ssl_context.check_hostname = False
+    print(f"SSL configuration loaded from {cert_file} and {key_file}")
+else:
+    print("SSL certificates not found, running without SSL")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,4 +81,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=True,
+        ssl_keyfile=key_file if ssl_context else None,
+        ssl_certfile=cert_file if ssl_context else None,
     )
