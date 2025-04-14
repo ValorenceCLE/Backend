@@ -214,22 +214,9 @@
         }
     ],
     "tasks": {
-        "1": {
-            "name": "Test",
-            "source": "relay_1",
-            "field": "volts",
-            "operator": ">",
-            "value": 5,
-            "actions": [
-                {
-                    "type": "io",
-                    "target": "relay_3",
-                    "state": "on"
-                }
-            ]
-        },
         "2": {
-            "name": "Test 2",
+            "id": "2",
+            "name": "Router Power Loss",
             "source": "relay_2",
             "field": "volts",
             "operator": "<",
@@ -238,7 +225,37 @@
                 {
                     "type": "io",
                     "target": "relay_2",
-                    "state": "off"
+                    "state": "pulse"
+                }
+            ]
+        },
+        "3": {
+            "id": null,
+            "name": "Too Hot",
+            "source": "environment",
+            "field": "Temperature",
+            "operator": ">",
+            "value": 100,
+            "actions": [
+                {
+                    "type": "io",
+                    "state": "on",
+                    "target": "relay_3"
+                }
+            ]
+        },
+        "4": {
+            "id": null,
+            "name": "Test",
+            "source": "relay_6",
+            "field": "watts",
+            "operator": ">",
+            "value": 0,
+            "actions": [
+                {
+                    "type": "io",
+                    "state": "on",
+                    "target": "relay_3"
                 }
             ]
         }

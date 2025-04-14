@@ -1,9 +1,8 @@
-# Stage 1: Base Image for Dependencies
 FROM python:3.11-bookworm AS base
 
-# Install build tools (and optionally Rust if required)
+# Install build tools
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc g++ make python3-dev && \
+    apt-get install -y --no-install-recommends gcc g++ make python3-dev libgpiod-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set up a virtual environment for Python
@@ -18,16 +17,16 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Optionally remove build tools to reduce image size
 RUN apt-get remove -y gcc g++ make python3-dev && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
-# Stage 2: Final Runtime Stage (Backend)
-FROM python:3.11-slim-bookworm AS backend
+# Final stage
+FROM python:3.11-slim-bookworm
 
 # Copy virtual environment from base stage
 COPY --from=base /venv /venv
 ENV PATH="/venv/bin:$PATH"
 
-# Install additional OS-level dependencies for GPIO if needed
+# Install additional OS-level dependencies for GPIO
 RUN apt-get update && \
-    apt-get install -y python3-rpi.gpio && \
+    apt-get install -y python3-rpi.gpio libgpiod2 && \
     rm -rf /var/lib/apt/lists/*
 
 # Copy the application code

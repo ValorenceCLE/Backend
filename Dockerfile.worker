@@ -1,0 +1,22 @@
+FROM python:3.11-slim-bookworm
+
+# Install dependencies for GPIO
+RUN apt-get update && \
+    apt-get install -y python3-rpi.gpio libgpiod2 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set up working directory
+WORKDIR /app
+
+# Copy requirements
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Make sure to add Celery to requirements if not already present
+# Copy application code
+COPY . .
+
+# Default command
+CMD ["celery", "-A", "celery_app", "worker", "--loglevel=info"]
