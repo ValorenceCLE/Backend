@@ -8,7 +8,7 @@
         "reboot_time": "04:00"
     },
     "network": {
-        "ip_address": "192.168.1.2",
+        "ip_address": "192.168.1.4",
         "subnet_mask": "255.255.255.0",
         "gateway": "192.168.1.1",
         "dhcp": true,
