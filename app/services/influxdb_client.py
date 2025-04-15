@@ -1,27 +1,32 @@
+# app/services/influxdb_client.py
 import logging
-from typing import List, Optional
-from datetime import datetime
+import asyncio
+import threading
+from typing import List, Optional, Dict
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from influxdb_client.client.flux_table import FluxTable
-from contextlib import asynccontextmanager
-import asyncio
+import time
+
+logging.getLogger('aiohttp').setLevel(logging.WARNING)
+logging.getLogger('asyncio').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-class InfluxDBClientService:
+class InfluxDBConnectionManager:
     _instance = None
+    _lock = asyncio.Lock()
     
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(InfluxDBClientService, cls).__new__(cls)
+            cls._instance = super(InfluxDBConnectionManager, cls).__new__(cls)
             cls._instance._initialized = False
         return cls._instance
     
     def __init__(self):
         if self._initialized:
             return
-        
+            
         from app.utils.config import settings
         self.url = settings.INFLUXDB_URL
         self.token = settings.DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
@@ -29,94 +34,191 @@ class InfluxDBClientService:
         self.bucket = settings.BUCKET
         self.client = None
         self._initialized = True
+        
+        # Circuit breaker state
+        self.failure_count = 0
+        self.last_failure_time = time.time()
+        self.circuit_open = False
+        self.reset_timeout = 60  # seconds
+        self.failure_threshold = 5
     
-    async def connect(self):
-        if self.client is None:
-            try:
-                self.client = InfluxDBClientAsync(
-                    url=self.url,
-                    token=self.token,
-                    org=self.org
-                )
-                logger.info("Connected to InfluxDB")
-            except Exception as e:
-                logger.error(f"Failed to connect to InfluxDB: {e}")
-                raise e
-    
-    @asynccontextmanager
     async def get_client(self):
-        """Context manager to ensure client is properly closed after use"""
+        """Get an InfluxDB client with circuit breaker pattern"""
+        async with self._lock:
+            # Check if circuit breaker is open
+            if self.circuit_open:
+                current_time = time.time()
+                if current_time - self.last_failure_time > self.reset_timeout:
+                    # Reset circuit breaker after timeout
+                    logger.info("Circuit breaker reset - attempting to reconnect to InfluxDB")
+                    self.circuit_open = False
+                    self.failure_count = 0
+                else:
+                    # Circuit still open - fail fast
+                    logger.debug("Circuit breaker open - skipping InfluxDB connection")
+                    return None
+            
+            # Create or validate client
+            try:
+                if self.client is None:
+                    self.client = InfluxDBClientAsync(
+                        url=self.url,
+                        token=self.token,
+                        org=self.org
+                    )
+                    logger.debug("Created new InfluxDB client")
+                    
+                # Test connection
+                if not await self.client.ping():
+                    await self._handle_connection_failure("Ping failed")
+                    return None
+                    
+                # Connection successful - reset failure count
+                self.failure_count = 0
+                return self.client
+                
+            except Exception as e:
+                await self._handle_connection_failure(str(e))
+                return None
+    
+    async def _handle_connection_failure(self, reason):
+        """Handle connection failure with circuit breaker logic"""
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+        
+        # Close existing client if any
+        if self.client:
+            try:
+                await self.client.close()
+            except Exception:
+                pass
+            self.client = None
+            
+        # Check if we should open circuit breaker
+        if self.failure_count >= self.failure_threshold:
+            if not self.circuit_open:
+                logger.warning(f"Opening circuit breaker after {self.failure_count} failures")
+                self.circuit_open = True
+        
+        logger.error(f"InfluxDB connection failure ({reason}). Failure count: {self.failure_count}")
+
+    async def close(self):
+        """Close the client connection"""
+        async with self._lock:
+            if self.client:
+                try:
+                    await self.client.close()
+                    self.client = None
+                    logger.debug("Closed InfluxDB client")
+                except Exception as e:
+                    logger.warning(f"Error closing InfluxDB client: {e}")
+                    self.client = None
+
+
+class InfluxDBWriter:
+    def __init__(self):
+        self.connection_manager = InfluxDBConnectionManager()
+        self.batch_size = 20
+        self.flush_interval = 5  # seconds
+        self.points_buffer = []
+        self.buffer_lock = asyncio.Lock()
+        self._shutdown = False
+        self._flush_task = None
+    
+    async def start(self):
+        """Start the background flush task"""
+        self._shutdown = False
+        self._flush_task = asyncio.create_task(self._periodic_flush())
+        logger.info("Started InfluxDB writer background task")
+    
+    async def stop(self):
+        """Stop the writer and flush remaining points"""
+        self._shutdown = True
+        if self._flush_task:
+            self._flush_task.cancel()
+            try:
+                await self._flush_task
+            except asyncio.CancelledError:
+                pass
+            
+        # Final flush
+        await self.flush()
+        logger.info("Stopped InfluxDB writer")
+    
+    async def write(self, point):
+        """Queue a point for writing"""
+        async with self.buffer_lock:
+            self.points_buffer.append(point)
+            
+            # Auto-flush if we hit the batch size
+            if len(self.points_buffer) >= self.batch_size:
+                await self._flush_internal()
+    
+    async def flush(self):
+        """Manually flush the buffer"""
+        async with self.buffer_lock:
+            await self._flush_internal()
+    
+    async def _flush_internal(self):
+        """Internal method to flush points - must be called with lock held"""
+        if not self.points_buffer:
+            return
+            
+        points_to_write = self.points_buffer.copy()
+        self.points_buffer = []
+        
+        # Release the lock before the potentially slow write operation
+        
+        # Get client from connection manager
+        client = await self.connection_manager.get_client()
+        if not client:
+            logger.error(f"Failed to get InfluxDB client, discarding {len(points_to_write)} points")
+            return
+            
         try:
-            await self.connect()
-            yield self.client
-        finally:
-            # We don't close the client here as it's a singleton
-            # Just yield it for the operation
-            pass
+            # Write the batch
+            write_api = client.write_api()
+            await write_api.write(
+                bucket=self.connection_manager.bucket,
+                org=self.connection_manager.org,
+                record=points_to_write
+            )
+            logger.info(f"Successfully wrote {len(points_to_write)} points to InfluxDB")
+        except Exception as e:
+            logger.error(f"Error writing batch to InfluxDB: {e}")
+            # We don't retry here as the connection manager handles circuit breaking
+            
+    async def _periodic_flush(self):
+        """Background task to periodically flush the buffer"""
+        while not self._shutdown:
+            try:
+                await asyncio.sleep(self.flush_interval)
+                await self.flush()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in periodic flush: {e}")
+
+
+class InfluxDBReader:
+    def __init__(self):
+        self.connection_manager = InfluxDBConnectionManager()
+        self.bucket = self.connection_manager.bucket
+        self.org = self.connection_manager.org
+
     
     async def query(self, query: str) -> List[FluxTable]:
-        """Execute a Flux query against InfluxDB with proper connection handling"""
-        try:
-            await self.connect()
-            query_api = self.client.query_api()
-            logger.debug(f"Executing query: {query}")
-            result = await query_api.query(query=query, org=self.org)  # Ensure org is passed
-            return result
-        except Exception as e:
-            logger.error(f"Query failed: {e}")
-            raise e
-        
-    async def close(self):
-        """Explicitly close the client connection"""
-        if self.client:
-            await self.client.close()
-            self.client = None
-            logger.info("Closed InfluxDB connection")
+        """Execute a Flux query and return the results"""
+        client = await self.connection_manager.get_client()
+        if not client:
+            logger.error("Failed to get InfluxDB client for query")
+            return None
             
-    async def health_check(self):
-        """Check if InfluxDB is reachable and ready"""
         try:
-            await self.connect()
-            # Simple ping to check if the server responds
-            if await self.client.ping():
-                logger.info("InfluxDB health check: OK")
-                return True
-            else:
-                logger.warning("InfluxDB health check: Failed")
-                return False
+            results = await client.query_api().query(query)
+            return results
         except Exception as e:
-            logger.error(f"InfluxDB health check error: {e}")
-            return False
+            logger.error(f"Error executing query: {e}")
+            return None
         finally:
-            await self.close()
-
-    async def write_point(self, point):
-        """Write a data point to InfluxDB with retry logic"""
-        max_retries = 3
-        retry_delay = 0.5  # seconds
-        
-        for attempt in range(1, max_retries + 1):
-            try:
-                await self.connect()
-                # For InfluxDB v2.x API
-                write_api = self.client.write_api()
-                await write_api.write(bucket=self.bucket, org=self.org, record=point)
-                logger.debug(f"Successfully wrote point to InfluxDB: {point}")
-                return True
-            except Exception as e:
-                logger.error(f"Failed to write point to InfluxDB: {e}")
-                if attempt < max_retries:
-                    logger.info(f"Retrying in {retry_delay} seconds (attempt {attempt}/{max_retries})")
-                    await asyncio.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-                else:
-                    # Log final failure but don't raise exception to avoid task failure
-                    logger.error(f"Failed to write point after {max_retries} attempts")
-                    return False
-            finally:
-                # Always make sure to close the connection
-                if self.client:
-                    try:
-                        await self.close()
-                    except Exception as close_error:
-                        logger.warning(f"Error closing InfluxDB connection: {close_error}")
+            await self.connection_manager.close()

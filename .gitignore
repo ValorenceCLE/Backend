@@ -5,3 +5,4 @@ secrets/
 Backend.code-workspace
 custom_config.json
 /certs
+.celerybeat-schedule

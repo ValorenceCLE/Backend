@@ -49,7 +49,7 @@ async def handle_usage_authentication(websocket: WebSocket, token: str):
 async def websocket_usage(
     websocket: WebSocket, 
     token: str = Query(None),
-    interval: int = Query(3000, ge=1000, le=10000)
+    interval: int = Query(1000, ge=1000, le=10000)
 ):
     """
     WebSocket endpoint to stream system usage metrics with optional authentication.
@@ -57,7 +57,7 @@ async def websocket_usage(
     Args:
         websocket: The WebSocket connection
         token: Optional authentication token
-        interval: Update interval in milliseconds (default: 3000ms)
+        interval: Update interval in milliseconds (default: 1000ms)
     """
     # Convert interval to seconds
     update_interval = interval / 1000

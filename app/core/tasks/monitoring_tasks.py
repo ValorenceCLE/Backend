@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, Any
 from celery_app import app
-from app.services.influxdb_client import InfluxDBClientService
+from app.services.influxdb_client import InfluxDBWriter
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +40,14 @@ def monitor_system():
     finally:
         loop.close()
 
+# app/core/tasks/monitoring_tasks.py
+# In the _collect_system_metrics function
+
 async def _collect_system_metrics():
     """Collect and store system performance metrics"""
     try:
-        # Collect CPU usage
-        cpu_percent = psutil.cpu_percent(interval=1)
+        # Collect CPU usage (non-blocking)
+        cpu_percent = psutil.cpu_percent(interval=0.5)
         
         # Collect memory usage
         memory = psutil.virtual_memory()
@@ -54,45 +57,42 @@ async def _collect_system_metrics():
         disk = psutil.disk_usage('/')
         disk_percent = disk.percent
         
-        # Collect network stats
-        net_io = psutil.net_io_counters()
-        
         # Store in InfluxDB
-        influx = InfluxDBClientService()
-        await influx.connect()
-        
         try:
-            # Create data point for InfluxDB
+            # Create data point
             timestamp = datetime.now(timezone.utc).isoformat()
             point = {
                 "measurement": "system_metrics",
                 "tags": {},
                 "fields": {
-                    "cpu_percent": cpu_percent,
-                    "memory_percent": memory_percent,
-                    "disk_percent": disk_percent,
-                    "bytes_sent": net_io.bytes_sent,
-                    "bytes_recv": net_io.bytes_recv
+                    "cpu_percent": float(cpu_percent),
+                    "memory_percent": float(memory_percent),
+                    "disk_percent": float(disk_percent)
                 },
                 "time": timestamp
             }
             
-            # Write to InfluxDB
-            await influx.write_point(point)
-            logger.debug(f"Stored system metrics: CPU {cpu_percent}%, Memory {memory_percent}%, Disk {disk_percent}%")
+            # Use a fresh client
+            influx = InfluxDBWriter()
+            success = await influx.write(point)
             
-            # Update WebSocket data
-            from app.api.websocket import update_sensor_data
-            update_sensor_data("system", {
-                "timestamp": timestamp,
-                "cpu": cpu_percent,
-                "memory": memory_percent,
-                "disk": disk_percent
-            })
+            if success:
+                logger.debug(f"Stored system metrics: CPU {cpu_percent}%, Memory {memory_percent}%, Disk {disk_percent}%")
             
-        finally:
-            # Ensure connection is closed
-            await influx.close()
+            # Update WebSocket data regardless of storage success
+            try:
+                from app.api.websocket import update_sensor_data
+                update_sensor_data("system", {
+                    "timestamp": timestamp,
+                    "cpu": cpu_percent,
+                    "memory": memory_percent,
+                    "disk": disk_percent
+                })
+            except Exception as e:
+                logger.error(f"Error updating WebSocket data: {e}")
+            
+        except Exception as e:
+            logger.error(f"Error storing system metrics: {e}")
             
     except Exception as e:
         logger.error(f"Error collecting system metrics: {e}")

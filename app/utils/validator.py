@@ -257,7 +257,7 @@ def load_config(config_path: str = "config.json") -> Config:
 
         # Create Config instance, which will validate the configuration
         config = Config(**config_data)
-        logger.info("Configuration loaded and validated successfully")
+        logger.debug("Configuration loaded and validated successfully")
         return config
 
     except FileNotFoundError as e:

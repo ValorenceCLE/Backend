@@ -3,7 +3,7 @@ from fastapi import APIRouter, Query, Depends, HTTPException
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import logging
-from app.services.influxdb_client import InfluxDBClientService
+from app.services.influxdb_client import InfluxDBReader
 from app.utils.dependencies import is_authenticated
 
 # Set up logging
@@ -13,7 +13,7 @@ logger.setLevel(logging.INFO)
 router = APIRouter(prefix="/timeseries", tags=["Time Series Data"])
 
 # Instantiate InfluxDB client
-influx_client = InfluxDBClientService()
+influx_client = InfluxDBReader()
 
 @router.get("/query", dependencies=[Depends(is_authenticated)])
 async def query_data(
@@ -89,9 +89,3 @@ async def query_data(
     except Exception as e:
         logger.error(f"Query failed: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
-    finally:
-        # Ensure client connection doesn't remain open
-        try:
-            await influx_client.close()
-        except Exception as close_error:
-            logger.error(f"Error closing InfluxDB connection: {close_error}")

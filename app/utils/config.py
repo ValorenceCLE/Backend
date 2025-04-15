@@ -34,6 +34,49 @@ class Settings(BaseSettings):
     ORG: str = 'RPi'
     BUCKET: str = 'Raw_Data'
     
+
+    # Config
+    CONFIG_FILE: str = 'app/config/config.json'
+    CUSTOM_CONFIG_FILE: str = 'app/config/custom_config.json'
+    SSL_CERT_FILE: Path = "/app/certs/deviceCert.crt"
+    SSL_KEY_FILE: Path = "/app/certs/deviceCert.key"
+
+
+    # GPIO settings
+    HARDWARE_CONFIG: dict=  {
+        "relay_1": {"pin": 22, "normally": "closed"},  # Camera Disable
+        "relay_2": {"pin": 27, "normally": "closed"},  # Router Disable
+        "relay_3": {"pin": 17, "normally": "open"},    # Enable
+        "relay_4": {"pin": 4,  "normally": "open"},    # Enable
+        "relay_5": {"pin": 24, "normally": "open"},    # Enable
+        "relay_6": {"pin": 23, "normally": "open"},    # Fan Enable
+    }
+    GPIO_CHIP: str ="/dev/gpiochip0"
+
+    # Sensor settings
+    INA260_SENSORS: list = [
+        {"relay_id": "relay_1", "address": 0x44},
+        {"relay_id": "relay_2", "address": 0x45},
+        {"relay_id": "relay_3", "address": 0x46},
+        {"relay_id": "relay_4", "address": 0x47},
+        {"relay_id": "relay_5", "address": 0x48},
+        {"relay_id": "relay_6", "address": 0x49},
+        {"relay_id": "main", "address": 0x4B},
+    ]
+
+    # Schedule Bitmask
+    DAY_BITMASK: dict = {
+    "Sunday": 2,
+    "Monday": 4,
+    "Tuesday": 8,
+    "Wednesday": 16,
+    "Thursday": 32,
+    "Friday": 64,
+    "Saturday": 128
+    }
+
+
+
     # Redis settings
     REDIS_URL: str = 'redis://redis:6379'
     

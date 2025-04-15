@@ -24,11 +24,6 @@ FROM python:3.11-slim-bookworm
 COPY --from=base /venv /venv
 ENV PATH="/venv/bin:$PATH"
 
-# Install additional OS-level dependencies for GPIO
-RUN apt-get update && \
-    apt-get install -y python3-rpi.gpio libgpiod2 && \
-    rm -rf /var/lib/apt/lists/*
-
 # Copy the application code
 WORKDIR /app
 COPY . .

@@ -4,7 +4,7 @@ WebSocket endpoints for real-time data streaming.
 This module provides WebSocket endpoints for streaming real-time sensor data
 and system metrics to connected clients.
 """
-from fastapi import WebSocket, WebSocketDisconnect, Query, Depends, HTTPException, status
+from fastapi import WebSocket, WebSocketDisconnect, Query, Depends, HTTPException, status, APIRouter
 import asyncio
 import json
 import logging
@@ -125,3 +125,6 @@ def update_sensor_data(source: str, data: Dict[str, Any]):
     """
     global latest_sensor_data
     latest_sensor_data[source] = data
+
+
+
