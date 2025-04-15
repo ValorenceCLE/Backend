@@ -10,12 +10,18 @@ import psutil
 import time
 from datetime import datetime, timezone
 from typing import Dict, Any
-from celery import shared_task
+from celery_app import app
 from app.services.influxdb_client import InfluxDBClientService
 
 logger = logging.getLogger(__name__)
 
-@shared_task
+@app.task(
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=3
+)
 def monitor_system():
     """
     Monitor system performance and store metrics in InfluxDB.
@@ -91,7 +97,13 @@ async def _collect_system_metrics():
     except Exception as e:
         logger.error(f"Error collecting system metrics: {e}")
 
-@shared_task
+@app.task(
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
+    max_retries=3
+)
 def check_network_connectivity():
     """
     Check network connectivity to important hosts.

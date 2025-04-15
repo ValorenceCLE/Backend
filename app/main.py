@@ -24,6 +24,7 @@ from app.api.device import router as device_router
 from app.api.sensors import router as sensors_router
 from app.api.timeseries import router as timeseries_router
 import logging
+import asyncio
 
 # Configure logging
 logging.basicConfig(
@@ -49,11 +50,34 @@ if cert_file.exists() and key_file.exists():
 else:
     logger.warning(f"SSL certificates not found at {cert_file} and {key_file}, running without SSL")
 
+async def wait_for_influxdb():
+    """Wait for InfluxDB to be available"""
+    from app.services.influxdb_client import InfluxDBClientService
+    
+    max_retries = 10
+    retry_delay = 2  # seconds
+    
+    for i in range(max_retries):
+        logger.info(f"Checking InfluxDB connection (attempt {i+1}/{max_retries})...")
+        
+        influxdb_client = InfluxDBClientService()
+        if await influxdb_client.health_check():
+            logger.info("InfluxDB is ready")
+            return True
+        
+        await asyncio.sleep(retry_delay)
+    
+    logger.warning("Could not connect to InfluxDB after several attempts. Proceeding anyway.")
+    return False
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Load config at startup
     async with aiofiles.open("app/config/custom_config.json", "r") as file:
         app.state.config = json.loads(await file.read())
+    
+    # Wait for databases to be ready 
+    await wait_for_influxdb()
     
     # Log application startup
     logger.info("Application started")

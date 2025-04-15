@@ -4,6 +4,7 @@ from datetime import datetime
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from influxdb_client.client.flux_table import FluxTable
 from contextlib import asynccontextmanager
+import asyncio
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -71,3 +72,51 @@ class InfluxDBClientService:
             await self.client.close()
             self.client = None
             logger.info("Closed InfluxDB connection")
+            
+    async def health_check(self):
+        """Check if InfluxDB is reachable and ready"""
+        try:
+            await self.connect()
+            # Simple ping to check if the server responds
+            if await self.client.ping():
+                logger.info("InfluxDB health check: OK")
+                return True
+            else:
+                logger.warning("InfluxDB health check: Failed")
+                return False
+        except Exception as e:
+            logger.error(f"InfluxDB health check error: {e}")
+            return False
+        finally:
+            await self.close()
+
+    async def write_point(self, point):
+        """Write a data point to InfluxDB with retry logic"""
+        max_retries = 3
+        retry_delay = 0.5  # seconds
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                await self.connect()
+                # For InfluxDB v2.x API
+                write_api = self.client.write_api()
+                await write_api.write(bucket=self.bucket, org=self.org, record=point)
+                logger.debug(f"Successfully wrote point to InfluxDB: {point}")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to write point to InfluxDB: {e}")
+                if attempt < max_retries:
+                    logger.info(f"Retrying in {retry_delay} seconds (attempt {attempt}/{max_retries})")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                else:
+                    # Log final failure but don't raise exception to avoid task failure
+                    logger.error(f"Failed to write point after {max_retries} attempts")
+                    return False
+            finally:
+                # Always make sure to close the connection
+                if self.client:
+                    try:
+                        await self.close()
+                    except Exception as close_error:
+                        logger.warning(f"Error closing InfluxDB connection: {close_error}")

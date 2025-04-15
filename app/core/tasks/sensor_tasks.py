@@ -8,9 +8,9 @@ import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
-from celery import shared_task
 from app.services.smbus import INA260Sensor, SHT30Sensor
 from app.services.influxdb_client import InfluxDBClientService
+from celery_app import app
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ def _get_sht30_sensor() -> Optional[SHT30Sensor]:
             return None
     return _sht30_sensor
 
-@shared_task(
+@app.task(
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,

@@ -7,15 +7,17 @@ defined rules and executing actions.
 import asyncio
 import logging
 from typing import Dict, Any, List
-from celery import shared_task
+from celery_app import app
 from app.utils.validator import load_config, Task
 from app.services.controller import RelayControl
 
 logger = logging.getLogger(__name__)
 
-@shared_task(
+@app.task(
     autoretry_for=(Exception,),
     retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
     max_retries=3
 )
 def evaluate_rules(source: str, data: Dict[str, float]):
@@ -42,7 +44,7 @@ async def _evaluate_rules_async(source: str, data: Dict[str, float]):
     """Asynchronously evaluate rules for a data source"""
     try:
         # Load configuration to get tasks
-        config = load_config("config/custom_config.json")
+        config = load_config("app/config/custom_config.json")
         
         # Build source-to-tasks mapping
         source_to_tasks = {}

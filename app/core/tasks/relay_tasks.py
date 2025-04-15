@@ -8,15 +8,17 @@ import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, Any, List
-from celery import shared_task
+from celery_app import app
 from app.services.controller import RelayControl
 from app.utils.validator import load_config, RelayConfig
 
 logger = logging.getLogger(__name__)
 
-@shared_task(
+@app.task(
     autoretry_for=(Exception,),
     retry_backoff=True,
+    retry_backoff_max=300,
+    retry_jitter=True,
     max_retries=3
 )
 def check_schedules():
@@ -41,7 +43,7 @@ async def _check_all_schedules():
     """Check all relay schedules and update states"""
     try:
         # Load current configuration
-        config = load_config("config/custom_config.json")
+        config = load_config("app/config/custom_config.json")
         
         # Process each relay
         for relay in config.relays:
@@ -109,92 +111,114 @@ def _should_be_on(relay: RelayConfig) -> bool:
         # Normal schedule (e.g., ON at 08:00, OFF at 17:00)
         return on_time <= current_time < off_time
 
-@shared_task(
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=3
-)
-def set_relay_state(relay_id: str, state: bool):
-    """
-    Set a relay to ON or OFF.
-    
-    This task can be called from API endpoints or other tasks.
-    """
-    logger.info(f"Setting relay {relay_id} to {'ON' if state else 'OFF'}")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        result = loop.run_until_complete(_set_relay_state(relay_id, state))
-        return result
-    except Exception as e:
-        logger.error(f"Error setting relay state: {e}")
-        return {"status": "error", "message": str(e)}
-    finally:
-        loop.close()
 
-async def _set_relay_state(relay_id: str, state: bool) -> Dict[str, Any]:
-    """Asynchronously set relay state"""
+
+logger = logging.getLogger(__name__)
+
+@app.task
+def get_relay_state(relay_id: str) -> Dict[str, Any]:
+    """
+    Get the current state of a relay.
+    """
     try:
         controller = RelayControl(relay_id)
-        if state:
-            result = await controller.turn_on()
-        else:
-            result = await controller.turn_off()
-        return result
-    except Exception as e:
-        logger.error(f"Error setting relay {relay_id} to {'ON' if state else 'OFF'}: {e}")
-        return {"status": "error", "message": str(e)}
-
-@shared_task(
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    max_retries=3
-)
-def pulse_relay(relay_id: str, duration: float = 5.0):
-    """
-    Pulse a relay (toggle its state) for the specified duration.
-    
-    This task can be called from API endpoints or other tasks.
-    """
-    logger.info(f"Pulsing relay {relay_id} for {duration} seconds")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        result = loop.run_until_complete(_pulse_relay(relay_id, duration))
-        return result
-    except Exception as e:
-        logger.error(f"Error pulsing relay: {e}")
-        return {"status": "error", "message": str(e)}
-    finally:
-        loop.close()
-
-async def _pulse_relay(relay_id: str, duration: float) -> Dict[str, Any]:
-    """Asynchronously pulse relay"""
-    try:
-        controller = RelayControl(relay_id)
-        
-        # Get initial state
-        initial_state = controller.state
-        
-        # Toggle state
-        if initial_state == 1:
-            await controller.turn_off()
-        else:
-            await controller.turn_on()
-            
-        # Wait for duration
-        await asyncio.sleep(duration)
-        
-        # Restore initial state
-        if initial_state == 1:
-            await controller.turn_on()
-        else:
-            await controller.turn_off()
-            
+        state = controller.state
         return {
-            "status": "success", 
-            "message": f"Relay {relay_id} pulsed for {duration} seconds"
+            "status": "success",
+            "relay_id": relay_id,
+            "state": state
         }
     except Exception as e:
-        logger.error(f"Error pulsing relay {relay_id}: {e}")
-        return {"status": "error", "message": str(e)}
+        logger.exception(f"Error getting state for relay {relay_id}: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "relay_id": relay_id,
+            "state": None
+        }
+
+@app.task
+def set_relay_state(relay_id: str, state: bool) -> Dict[str, Any]:
+    """
+    Set a relay to ON or OFF.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        controller = RelayControl(relay_id)
+        
+        # Run the async controller operation in the event loop
+        if state:
+            result = loop.run_until_complete(controller.turn_on())
+        else:
+            result = loop.run_until_complete(controller.turn_off())
+            
+        return result
+    except Exception as e:
+        logger.exception(f"Error setting relay {relay_id} to {'ON' if state else 'OFF'}: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "relay_id": relay_id,
+            "state": None
+        }
+    finally:
+        loop.close()
+
+@app.task
+def pulse_relay(relay_id: str, duration: float = 5.0) -> Dict[str, Any]:
+    """
+    Pulse a relay by toggling it, waiting for a duration, then toggling back.
+    """
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    try:
+        controller = RelayControl(relay_id)
+        
+        # Toggle the relay
+        loop.run_until_complete(controller.toggle())
+        
+        # Wait for specified duration
+        loop.run_until_complete(asyncio.sleep(duration))
+        
+        # Toggle back
+        result = loop.run_until_complete(controller.toggle())
+        
+        return {
+            "status": "success",
+            "relay_id": relay_id,
+            "message": f"Relay pulsed for {duration} seconds",
+            "state": result.get("state")
+        }
+    except Exception as e:
+        logger.exception(f"Error pulsing relay {relay_id}: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "relay_id": relay_id,
+            "state": None
+        }
+    finally:
+        loop.close()
+
+@app.task
+def get_all_relay_states(relay_ids: List[str]) -> Dict[str, int]:
+    """
+    Get the states of multiple relays at once.
+    """
+    try:
+        result = {}
+        for relay_id in relay_ids:
+            try:
+                controller = RelayControl(relay_id)
+                result[relay_id] = controller.state
+            except Exception as e:
+                logger.error(f"Error getting state for relay {relay_id}: {e}")
+                result[relay_id] = None
+        
+        return result
+    except Exception as e:
+        logger.exception(f"Error getting multiple relay states: {e}")
+        return {}
