@@ -41,9 +41,9 @@ class InfluxDBConnectionManager:
         self.circuit_open = False
         self.reset_timeout = 60  # seconds
         self.failure_threshold = 5
-    
+        
     async def get_client(self):
-        """Get an InfluxDB client with circuit breaker pattern"""
+        """Get a new InfluxDB client with circuit breaker pattern"""
         async with self._lock:
             # Check if circuit breaker is open
             if self.circuit_open:
@@ -58,25 +58,25 @@ class InfluxDBConnectionManager:
                     logger.debug("Circuit breaker open - skipping InfluxDB connection")
                     return None
             
-            # Create or validate client
+            # Always create a new client - don't cache
             try:
-                if self.client is None:
-                    self.client = InfluxDBClientAsync(
-                        url=self.url,
-                        token=self.token,
-                        org=self.org
-                    )
-                    logger.debug("Created new InfluxDB client")
-                    
+                client = InfluxDBClientAsync(
+                    url=self.url,
+                    token=self.token,
+                    org=self.org
+                )
+                logger.debug("Created new InfluxDB client")
+                
                 # Test connection
-                if not await self.client.ping():
+                if not await client.ping():
                     await self._handle_connection_failure("Ping failed")
+                    # Close the client if ping fails
+                    await client.close()
                     return None
                     
                 # Connection successful - reset failure count
                 self.failure_count = 0
-                return self.client
-                
+                return client
             except Exception as e:
                 await self._handle_connection_failure(str(e))
                 return None
@@ -167,8 +167,6 @@ class InfluxDBWriter:
         points_to_write = self.points_buffer.copy()
         self.points_buffer = []
         
-        # Release the lock before the potentially slow write operation
-        
         # Get client from connection manager
         client = await self.connection_manager.get_client()
         if not client:
@@ -186,7 +184,12 @@ class InfluxDBWriter:
             logger.info(f"Successfully wrote {len(points_to_write)} points to InfluxDB")
         except Exception as e:
             logger.error(f"Error writing batch to InfluxDB: {e}")
-            # We don't retry here as the connection manager handles circuit breaking
+        finally:
+            # Ensure client is properly closed to clean up aiohttp resources
+            try:
+                await client.close()
+            except Exception as e:
+                logger.warning(f"Error closing InfluxDB client: {e}")
             
     async def _periodic_flush(self):
         """Background task to periodically flush the buffer"""

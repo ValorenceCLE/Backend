@@ -21,8 +21,8 @@ logger = logging.getLogger(__name__)
 async def get_cpu_usage():
     """Asynchronously retrieves the current CPU usage percentage using a thread executor."""
     loop = asyncio.get_running_loop()
-    # psutil.cpu_percent blocks for the interval; run it in a thread
-    return await loop.run_in_executor(executor, psutil.cpu_percent, 1)
+    # Use 0 interval to get immediate reading instead of waiting 1 second
+    return await loop.run_in_executor(executor, psutil.cpu_percent, 0)
 
 async def get_memory_usage():
     """Asynchronously retrieves the current memory usage percentage using a thread executor."""
@@ -49,7 +49,7 @@ async def handle_usage_authentication(websocket: WebSocket, token: str):
 async def websocket_usage(
     websocket: WebSocket, 
     token: str = Query(None),
-    interval: int = Query(1000, ge=1000, le=10000)
+    interval: int = Query(3000, ge=1000, le=10000)
 ):
     """
     WebSocket endpoint to stream system usage metrics with optional authentication.
@@ -57,10 +57,10 @@ async def websocket_usage(
     Args:
         websocket: The WebSocket connection
         token: Optional authentication token
-        interval: Update interval in milliseconds (default: 1000ms)
+        interval: Update interval in milliseconds (default: 3000ms)
     """
     # Convert interval to seconds
-    update_interval = interval / 1000
+    update_interval = interval / 3000
     connection_id = f"usage_{id(websocket)}"
     
     # Define authentication handler
