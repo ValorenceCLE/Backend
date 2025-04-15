@@ -1,12 +1,25 @@
 from celery import Celery
 import redis
 import logging
-from celery.signals import worker_shutdown, worker_ready
+from celery.signals import worker_shutdown, worker_ready, task_failure, task_success
+
+# Configure root logger
+logging.basicConfig(level=logging.INFO, 
+                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Set specific module loggers
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
-logging.getLogger('celery').setLevel(logging.ERROR)  # Only show errors
-logging.getLogger('celery.task').setLevel(logging.ERROR)
-logging.getLogger('celery.worker').setLevel(logging.ERROR)
+logger.setLevel(logging.INFO)
+
+# Set task-related loggers to INFO
+logging.getLogger('app.core.tasks.rule_tasks').setLevel(logging.INFO)
+logging.getLogger('app.core.tasks.sensor_tasks').setLevel(logging.INFO)
+
+# Filter out noisy loggers
+logging.getLogger('celery').setLevel(logging.WARNING)
+logging.getLogger('celery.task').setLevel(logging.WARNING)
+logging.getLogger('celery.worker').setLevel(logging.WARNING)
+
 # Create Celery instance
 app = Celery(
     'backend',
@@ -27,17 +40,16 @@ app.conf.update(
     result_serializer='json',
     timezone='UTC',
     enable_utc=True,
-    worker_concurrency=1,
-    worker_pool='prefork',
+    worker_concurrency=2,  # Increase to handle multiple tasks
+    worker_prefetch_multiplier=1,  # Only prefetch one task at a time
+    worker_max_tasks_per_child=50,  # Restart workers occasionally to prevent memory leaks
     task_acks_late=True,
-    worker_prefetch_multiplier=1,
     task_reject_on_worker_lost=True,
-    worker_hijack_root_logger=False,  # Don't hijack the root logger
-    worker_log_color=False,           # Disable colors in logs
-    worker_log_format='',             # Empty format to disable logging
-    worker_task_log_format='',        # Empty format to disable task logging
-    worker_redirect_stdouts = False,
-    worker_redirect_stdouts_level = 'ERROR',
+    task_time_limit=30,  # Set a time limit on tasks to prevent hanging
+    worker_hijack_root_logger=False,
+    worker_log_color=False,
+    worker_redirect_stdouts=False,
+    worker_redirect_stdouts_level='ERROR',
     beat_schedule={
         'read-sensors-every-5-seconds': {
             'task': 'app.core.tasks.sensor_tasks.read_all_sensors',
@@ -58,20 +70,27 @@ app.conf.update(
     }
 )
 
-
 @worker_ready.connect
 def check_redis_connection(**kwargs):
     """Check Redis connection on worker startup"""
     try:
         redis_client = redis.Redis.from_url('redis://redis:6379/0')
         redis_client.ping()
-        logger.debug("Successfully connected to Redis")
+        logger.info("Successfully connected to Redis")
     except redis.ConnectionError:
         logger.error("Cannot connect to Redis! Celery worker will not function properly.")
 
+@task_failure.connect
+def handle_task_failure(sender=None, task_id=None, exception=None, **kwargs):
+    """Log task failures with details"""
+    logger.error(f"Task {sender.name}[{task_id}] failed: {exception}")
+
+@task_success.connect
+def handle_task_success(sender=None, result=None, **kwargs):
+    """Log task successes (optional - can be commented out to reduce log volume)"""
+    logger.debug(f"Task {sender.name} completed successfully")
+
 @worker_shutdown.connect
 def cleanup_resources(**kwargs):
-    """Clean up GPIO resources when worker shuts down"""
-    from app.services.controller import RelayControl
-    logger.info("Cleaning up GPIO resources")
-    RelayControl.cleanup()
+    """Clean up resources when worker shuts down"""
+    logger.info("Cleaning up resources during worker shutdown")

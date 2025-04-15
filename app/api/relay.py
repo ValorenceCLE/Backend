@@ -24,7 +24,7 @@ async def turn_relay_on(relay_id: str) -> dict:
         )
         
         # Wait for result with timeout
-        result = task.get(timeout=5)
+        result = task.get(timeout=10)
         
         if result.get("status") != "success":
             raise HTTPException(
@@ -50,7 +50,7 @@ async def turn_relay_off(relay_id: str) -> dict:
         )
         
         # Wait for result with timeout
-        result = task.get(timeout=5)
+        result = task.get(timeout=10)
         
         if result.get("status") != "success":
             raise HTTPException(
@@ -86,7 +86,7 @@ async def pulse_relay(relay_id: str, request: Request) -> dict:
             'app.core.tasks.relay_tasks.get_relay_state',
             args=[relay_id],
         )
-        state_result = state_task.get(timeout=3)
+        state_result = state_task.get(timeout=10)
         initial_state = state_result.get("state", 0)
         
         # Submit pulse task
@@ -152,6 +152,25 @@ async def enabled_relay_states(request: Request) -> dict:
         return result
     except Exception as e:
         logger.exception(f"Error getting enabled relay states: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    
+@router.get("/rules/status")
+async def get_rules_status() -> dict:
+    """Get status of all rules via Celery task"""
+    try:
+        # Submit task to get rule status
+        task = celery_app.send_task(
+            'app.core.tasks.rule_tasks.get_rule_status',
+        )
+        
+        # Wait for result with timeout
+        result = task.get(timeout=10)
+        return result
+    except Exception as e:
+        logger.exception(f"Error getting rule status: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)

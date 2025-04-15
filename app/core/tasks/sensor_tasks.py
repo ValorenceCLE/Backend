@@ -131,9 +131,16 @@ class SensorDataCollector:
                 self._sensor_health[sensor_key] = True
                 self._last_successful_reads[sensor_key] = datetime.now()
                 
-                # Trigger rule evaluation
+                # Trigger rule evaluation - using .delay() to make it async
+                mapped_data = {
+                    "volts": data["voltage"],
+                    "amps": data["current"],
+                    "watts": data["power"]
+                }
+
+                # Trigger rule evaluation with the correctly mapped data
                 from app.core.tasks.rule_tasks import evaluate_rules
-                evaluate_rules.delay(relay_id, data)
+                evaluate_rules.delay(relay_id, mapped_data)
                 
                 # Update result
                 result["success"] = True
@@ -204,10 +211,15 @@ class SensorDataCollector:
                 # Track sensor health
                 self._sensor_health[sensor_key] = True
                 self._last_successful_reads[sensor_key] = datetime.now()
+
+                mapped_data = {
+                    "temperature": data["temperature"],
+                    "humidity": data["humidity"]
+                }
                 
-                # Trigger rule evaluation
+                # Trigger rule evaluation - using .delay() to make it async
                 from app.core.tasks.rule_tasks import evaluate_rules
-                evaluate_rules.delay("environmental", data)
+                evaluate_rules.delay("environmental", mapped_data)
                 
                 # Update result
                 result["success"] = True
@@ -268,13 +280,14 @@ def get_collector_service():
     return _collector_service
 
 @app.task(
+    bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
     retry_jitter=True,
     max_retries=3
 )
-def read_all_sensors():
+def read_all_sensors(self):
     """
     Read all sensor data using the collector service.
     
@@ -299,6 +312,7 @@ def read_all_sensors():
         
     except Exception as e:
         logger.error(f"Error reading sensors: {e}")
+        self.retry(exc=e)
         return {"success": 0, "total": 0, "error": str(e)}
     finally:
         loop.close()

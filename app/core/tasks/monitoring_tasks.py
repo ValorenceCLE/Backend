@@ -16,38 +16,25 @@ from app.services.influxdb_client import InfluxDBWriter
 logger = logging.getLogger(__name__)
 
 @app.task(
+    bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
     retry_jitter=True,
     max_retries=3
 )
-def monitor_system():
+def monitor_system(self):
     """
     Monitor system performance and store metrics in InfluxDB.
     
     This task is scheduled to run periodically by Celery Beat.
     """
     logger.debug("Running system monitoring")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    
     try:
-        loop.run_until_complete(_collect_system_metrics())
-        return True
-    except Exception as e:
-        logger.error(f"Error monitoring system: {e}")
-        return False
-    finally:
-        loop.close()
-
-# app/core/tasks/monitoring_tasks.py
-# In the _collect_system_metrics function
-
-async def _collect_system_metrics():
-    """Collect and store system performance metrics"""
-    try:
+        # Collect metrics synchronously to avoid event loop issues
         # Collect CPU usage (non-blocking)
-        cpu_percent = psutil.cpu_percent(interval=0.5)
+        cpu_percent = psutil.cpu_percent(interval=0.1)  # Use shorter interval
         
         # Collect memory usage
         memory = psutil.virtual_memory()
@@ -57,73 +44,134 @@ async def _collect_system_metrics():
         disk = psutil.disk_usage('/')
         disk_percent = disk.percent
         
-        # Store in InfluxDB
+        # Create data point to store in InfluxDB
+        timestamp = datetime.now(timezone.utc).isoformat()
+        point = {
+            "measurement": "system_metrics",
+            "tags": {},
+            "fields": {
+                "cpu_percent": float(cpu_percent),
+                "memory_percent": float(memory_percent),
+                "disk_percent": float(disk_percent)
+            },
+            "time": timestamp
+        }
+        
+        # Queue for storing (non-blocking)
+        write_influx_point.delay(point)
+        
+        # Update WebSocket data (non-blocking)
         try:
-            # Create data point
-            timestamp = datetime.now(timezone.utc).isoformat()
-            point = {
-                "measurement": "system_metrics",
-                "tags": {},
-                "fields": {
-                    "cpu_percent": float(cpu_percent),
-                    "memory_percent": float(memory_percent),
-                    "disk_percent": float(disk_percent)
-                },
-                "time": timestamp
-            }
-            
-            # Use a fresh client
-            influx = InfluxDBWriter()
-            success = await influx.write(point)
-            
-            if success:
-                logger.debug(f"Stored system metrics: CPU {cpu_percent}%, Memory {memory_percent}%, Disk {disk_percent}%")
-            
-            # Update WebSocket data regardless of storage success
-            try:
-                from app.api.websocket import update_sensor_data
-                update_sensor_data("system", {
-                    "timestamp": timestamp,
-                    "cpu": cpu_percent,
-                    "memory": memory_percent,
-                    "disk": disk_percent
-                })
-            except Exception as e:
-                logger.error(f"Error updating WebSocket data: {e}")
-            
+            from app.api.websocket import update_sensor_data
+            update_sensor_data("system", {
+                "timestamp": timestamp,
+                "cpu": cpu_percent,
+                "memory": memory_percent,
+                "disk": disk_percent
+            })
         except Exception as e:
-            logger.error(f"Error storing system metrics: {e}")
+            logger.error(f"Error updating WebSocket data: {e}")
             
+        logger.debug(f"System metrics collected: CPU {cpu_percent}%, Memory {memory_percent}%, Disk {disk_percent}%")
+        return {
+            "cpu": cpu_percent,
+            "memory": memory_percent,
+            "disk": disk_percent
+        }
     except Exception as e:
-        logger.error(f"Error collecting system metrics: {e}")
+        logger.error(f"Error monitoring system: {e}", exc_info=True)
+        self.retry(exc=e)
+        return None
 
 @app.task(
+    bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
     retry_jitter=True,
     max_retries=3
 )
-def check_network_connectivity():
+def check_network_connectivity(self):
     """
     Check network connectivity to important hosts.
     
     This task is scheduled to run periodically by Celery Beat.
     """
     logger.debug("Checking network connectivity")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+    
     try:
-        loop.run_until_complete(_check_connectivity())
-        return True
+        # Use system ping command to avoid event loop issues
+        import subprocess
+        hosts = ["8.8.8.8", "1.1.1.1", "google.com"]
+        results = {}
+        
+        for host in hosts:
+            try:
+                # Use system ping command with timeout
+                result = subprocess.run(
+                    ["ping", "-c", "1", "-W", "2", host],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=3
+                )
+                success = result.returncode == 0
+                results[host] = success
+                logger.debug(f"Ping to {host}: {'Success' if success else 'Failed'}")
+            except Exception as e:
+                logger.error(f"Error pinging {host}: {e}")
+                results[host] = False
+        
+        # Record network connectivity in InfluxDB
+        point = {
+            "measurement": "network_connectivity",
+            "tags": {},
+            "fields": {
+                host.replace(".", "_"): int(status) for host, status in results.items()
+            },
+            "time": datetime.now(timezone.utc).isoformat()
+        }
+        write_influx_point.delay(point)
+        
+        # Calculate overall status
+        online = sum(1 for status in results.values() if status)
+        total = len(results)
+        
+        logger.info(f"Network connectivity: {online}/{total} hosts reachable")
+        return {
+            "hosts": results,
+            "online": online,
+            "total": total
+        }
     except Exception as e:
-        logger.error(f"Error checking network connectivity: {e}")
-        return False
-    finally:
-        loop.close()
+        logger.error(f"Error checking network connectivity: {e}", exc_info=True)
+        self.retry(exc=e)
+        return None
 
-async def _check_connectivity():
-    """Check connectivity to important hosts"""
-    # This implementation will depend on your specific networking needs
-    # For demonstration purposes, we'll just log a message
-    logger.info("Network connectivity check would be implemented here")
+@app.task(bind=True, max_retries=3)
+def write_influx_point(self, point):
+    """
+    Write a data point to InfluxDB.
+    
+    This is a helper task to avoid blocking other tasks when writing to InfluxDB.
+    """
+    try:
+        from app.services.influxdb_client import InfluxDBWriter
+        influx = InfluxDBWriter()
+        
+        # Use synchronous approach to avoid event loop issues
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(influx.write(point))
+            logger.debug(f"Successfully wrote point to InfluxDB: {point['measurement']}")
+            return True
+        except Exception as e:
+            logger.error(f"Error writing to InfluxDB: {e}")
+            self.retry(exc=e)
+            return False
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.error(f"Error creating InfluxDB writer: {e}")
+        self.retry(exc=e)
+        return False

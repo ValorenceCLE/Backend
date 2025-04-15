@@ -15,37 +15,26 @@ from app.utils.validator import load_config, RelayConfig
 logger = logging.getLogger(__name__)
 
 @app.task(
+    bind=True,
     autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
     retry_jitter=True,
     max_retries=3
 )
-def check_schedules():
+def check_schedules(self):
     """
     Check all relay schedules and update relay states as needed.
     
     This task is scheduled to run periodically by Celery Beat.
     """
-    logger.debug("Checking relay schedules")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(_check_all_schedules())
-        return True
-    except Exception as e:
-        logger.error(f"Error checking schedules: {e}")
-        return False
-    finally:
-        loop.close()
-
-async def _check_all_schedules():
-    """Check all relay schedules and update states"""
+    logger.info("Checking relay schedules")
+    
     try:
         # Load current configuration
         config = load_config("app/config/custom_config.json")
         
-        # Process each relay
+        # Process each relay synchronously
         for relay in config.relays:
             # Skip disabled relays
             if not relay.enabled:
@@ -58,7 +47,7 @@ async def _check_all_schedules():
             # Check if the relay should be ON or OFF based on schedule
             should_be_on = _should_be_on(relay)
             
-            # Get current state
+            # Get current state - DIRECTLY without using get_relay_state
             try:
                 controller = RelayControl(relay.id)
                 current_state = controller.state
@@ -66,16 +55,18 @@ async def _check_all_schedules():
                 
                 # Update state if needed
                 if should_be_on != is_on:
-                    logger.info(f"Schedule: Changing relay {relay.id} to {'ON' if should_be_on else 'OFF'}")
+                    logger.info(f"Schedule: Setting relay {relay.id} to {'ON' if should_be_on else 'OFF'}")
                     if should_be_on:
-                        await controller.turn_on()
+                        set_relay_state.delay(relay.id, True)
                     else:
-                        await controller.turn_off()
+                        set_relay_state.delay(relay.id, False)
             except Exception as e:
-                logger.error(f"Error updating relay {relay.id}: {e}")
-                
+                logger.error(f"Error checking relay {relay.id}: {e}")
+        
+        return True
     except Exception as e:
-        logger.error(f"Error processing schedules: {e}")
+        logger.error(f"Error checking schedules: {e}")
+        return False
 
 def _should_be_on(relay: RelayConfig) -> bool:
     """
@@ -111,12 +102,8 @@ def _should_be_on(relay: RelayConfig) -> bool:
         # Normal schedule (e.g., ON at 08:00, OFF at 17:00)
         return on_time <= current_time < off_time
 
-
-
-logger = logging.getLogger(__name__)
-
-@app.task
-def get_relay_state(relay_id: str) -> Dict[str, Any]:
+@app.task(bind=True, max_retries=2)
+def get_relay_state(self, relay_id: str) -> Dict[str, Any]:
     """
     Get the current state of a relay.
     """
@@ -130,6 +117,7 @@ def get_relay_state(relay_id: str) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.exception(f"Error getting state for relay {relay_id}: {e}")
+        self.retry(exc=e)
         return {
             "status": "error",
             "message": str(e),
@@ -137,8 +125,8 @@ def get_relay_state(relay_id: str) -> Dict[str, Any]:
             "state": None
         }
 
-@app.task
-def set_relay_state(relay_id: str, state: bool) -> Dict[str, Any]:
+@app.task(bind=True, max_retries=3)
+def set_relay_state(self, relay_id: str, state: bool) -> Dict[str, Any]:
     """
     Set a relay to ON or OFF.
     """
@@ -157,6 +145,7 @@ def set_relay_state(relay_id: str, state: bool) -> Dict[str, Any]:
         return result
     except Exception as e:
         logger.exception(f"Error setting relay {relay_id} to {'ON' if state else 'OFF'}: {e}")
+        self.retry(exc=e)
         return {
             "status": "error",
             "message": str(e),
@@ -166,8 +155,8 @@ def set_relay_state(relay_id: str, state: bool) -> Dict[str, Any]:
     finally:
         loop.close()
 
-@app.task
-def pulse_relay(relay_id: str, duration: float = 5.0) -> Dict[str, Any]:
+@app.task(bind=True, max_retries=3)
+def pulse_relay(self, relay_id: str, duration: float = 5.0) -> Dict[str, Any]:
     """
     Pulse a relay by toggling it, waiting for a duration, then toggling back.
     """
@@ -194,6 +183,7 @@ def pulse_relay(relay_id: str, duration: float = 5.0) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.exception(f"Error pulsing relay {relay_id}: {e}")
+        self.retry(exc=e)
         return {
             "status": "error",
             "message": str(e),
@@ -203,8 +193,8 @@ def pulse_relay(relay_id: str, duration: float = 5.0) -> Dict[str, Any]:
     finally:
         loop.close()
 
-@app.task
-def get_all_relay_states(relay_ids: List[str]) -> Dict[str, int]:
+@app.task(bind=True, max_retries=2)
+def get_all_relay_states(self, relay_ids: List[str]) -> Dict[str, int]:
     """
     Get the states of multiple relays at once.
     """
@@ -221,4 +211,5 @@ def get_all_relay_states(relay_ids: List[str]) -> Dict[str, int]:
         return result
     except Exception as e:
         logger.exception(f"Error getting multiple relay states: {e}")
+        self.retry(exc=e)
         return {}
