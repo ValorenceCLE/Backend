@@ -181,6 +181,7 @@ class Task(BaseModel):
     """
     Task configuration model.
     """
+    id: str  # Add explicit ID field
     name: str
     source: str
     field: str
@@ -229,7 +230,7 @@ class Config(BaseModel):
     network: NetworkConfig
     date_time: DateTimeConfig
     relays: List[RelayConfig]
-    tasks: Dict[str, Task]
+    tasks: List[Task]  # Changed from Dict[str, Task] to List[Task]
 
 def load_config(config_path: str = "config.json") -> Config:
     """

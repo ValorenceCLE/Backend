@@ -1,15 +1,19 @@
 """
-Task Manager for handling automated tasks and rules.
+Enhanced Task Manager for handling automated tasks and rules.
 
 This module processes data from sensors and executes actions based on configured rules.
+Includes improved error handling, state management, and concurrent task execution.
 """
 import asyncio
 import os
 import subprocess
+import time
 from typing import Dict, List, Any, Optional
 import logging
 from app.utils.validator import Task, TaskAction
 from app.services.controller import RelayControl
+import redis
+import json
 
 logger = logging.getLogger("TaskManager")
 logger.setLevel(logging.INFO)
@@ -20,31 +24,67 @@ logger.addHandler(handler)
 
 class TaskManager:
     """
-    Manages all automated tasks and rules in the system.
+    Enhanced Task Manager with improved error handling, state management,
+    and concurrent task execution.
     """
-    def __init__(self, tasks: Dict[str, Task], relay_manager: RelayControl):
+    def __init__(self, tasks: List[Task], relay_manager: RelayControl):
         """
         Initialize the TaskManager.
         
         Args:
-            tasks (Dict[str, Task]): Dictionary of task configurations.
-            relay_manager (RelayManager): The relay manager for controlling relays.
+            tasks (List[Task]): List of task configurations.
+            relay_manager (RelayControl): The relay manager for controlling relays.
         """
         self.tasks = tasks
         self.relay_manager = relay_manager
         
-        # Track task/rule states (triggered or not)
-        self.task_states: Dict[str, bool] = {task_id: False for task_id in tasks}
+        # Initialize Redis connection for state management
+        self.redis_client = redis.Redis.from_url('redis://redis:6379/0', decode_responses=True)
         
-        # Create a mapping from sources to task IDs for quicker lookup
-        self.source_to_tasks: Dict[str, List[str]] = {}
-        for task_id, task in tasks.items():
+        # Create task lookup maps
+        self.task_by_id: Dict[str, Task] = {task.id: task for task in tasks}
+        
+        # Track task states (triggered or not)
+        self.task_states: Dict[str, bool] = {}
+        self._load_task_states()
+        
+        # Create a mapping from sources to tasks for quicker lookup
+        self.source_to_tasks: Dict[str, List[Task]] = {}
+        for task in tasks:
             source = task.source
             if source not in self.source_to_tasks:
                 self.source_to_tasks[source] = []
-            self.source_to_tasks[source].append(task_id)
+            self.source_to_tasks[source].append(task)
         
+        # Concurrency control
         self._running = False
+        self._lock = asyncio.Lock()
+        self._action_semaphore = asyncio.Semaphore(5)  # Limit concurrent actions
+    
+    def _load_task_states(self):
+        """Load task states from Redis on startup."""
+        try:
+            for task in self.tasks:
+                state_key = f"task_state:{task.id}"
+                state = self.redis_client.get(state_key)
+                self.task_states[task.id] = bool(int(state)) if state else False
+                logger.debug(f"Loaded state for task {task.id}: {self.task_states[task.id]}")
+        except Exception as e:
+            logger.error(f"Error loading task states from Redis: {e}")
+            # Initialize all states to False if Redis fails
+            self.task_states = {task.id: False for task in self.tasks}
+    
+    def _save_task_state(self, task_id: str, state: bool):
+        """Save task state to Redis."""
+        try:
+            state_key = f"task_state:{task_id}"
+            self.redis_client.set(state_key, "1" if state else "0")
+            
+            # Also store timestamp of state change
+            timestamp_key = f"task_state_time:{task_id}"
+            self.redis_client.set(timestamp_key, time.time())
+        except Exception as e:
+            logger.error(f"Error saving task state to Redis: {e}")
     
     async def evaluate_data(self, source: str, data: Dict[str, float]):
         """
@@ -54,104 +94,109 @@ class TaskManager:
             source (str): The source of the data (e.g., "relay_1").
             data (Dict[str, float]): The data point (e.g., {"volts": 12.3, "amps": 0.5}).
         """
-        # Skip if no tasks for this source
-        if source not in self.source_to_tasks:
-            return
-        
-        task_ids = self.source_to_tasks[source]
-        logger.debug(f"Evaluating {len(task_ids)} tasks for source {source}")
-        
-        for task_id in task_ids:
-            task = self.tasks.get(task_id)
-            if not task:
-                continue
-            
+        async with self._lock:  # Prevent concurrent evaluation of the same source
+            try:
+                # Skip if no tasks for this source
+                if source not in self.source_to_tasks:
+                    return
+                
+                tasks = self.source_to_tasks[source]
+                logger.debug(f"Evaluating {len(tasks)} tasks for source {source}")
+                
+                # Process tasks concurrently but with limits
+                evaluation_tasks = []
+                for task in tasks:
+                    evaluation_tasks.append(self._evaluate_single_task(task, data))
+                
+                await asyncio.gather(*evaluation_tasks, return_exceptions=True)
+                
+            except Exception as e:
+                logger.error(f"Error in evaluate_data for source {source}: {e}", exc_info=True)
+    
+    async def _evaluate_single_task(self, task: Task, data: Dict[str, float]):
+        """Evaluate a single task against data."""
+        try:
             # Skip if the field doesn't exist in the data
             if task.field not in data:
-                logger.debug(f"Field '{task.field}' not in data for task '{task.name}' ({task_id})")
-                continue
+                logger.debug(f"Field '{task.field}' not in data for task '{task.name}' ({task.id})")
+                return
             
             # Evaluate the condition
             condition_met = self._evaluate_condition(data[task.field], task.operator, task.value)
-            previously_triggered = self.task_states.get(task_id, False)
+            previously_triggered = self.task_states.get(task.id, False)
             
-            logger.debug(f"Task '{task.name}' ({task_id}): condition_met={condition_met}, previously_triggered={previously_triggered}")
+            logger.debug(f"Task '{task.name}' ({task.id}): condition_met={condition_met}, previously_triggered={previously_triggered}")
             
             # Handle state changes
             if condition_met and not previously_triggered:
                 # NOT TRIGGERED -> TRIGGERED (alert_start)
-                self.task_states[task_id] = True
-                await self._handle_task_triggered(task_id, task, data)
+                self.task_states[task.id] = True
+                self._save_task_state(task.id, True)
+                await self._handle_task_triggered(task, data)
             elif not condition_met and previously_triggered:
                 # TRIGGERED -> NOT TRIGGERED (alert_clear)
-                self.task_states[task_id] = False
-                await self._handle_task_cleared(task_id, task, data)
+                self.task_states[task.id] = False
+                self._save_task_state(task.id, False)
+                await self._handle_task_cleared(task, data)
+                
+        except Exception as e:
+            logger.error(f"Error evaluating task {task.id}: {e}", exc_info=True)
     
     def _evaluate_condition(self, value: float, operator: str, threshold: float) -> bool:
         """
         Evaluate a condition based on the operator and threshold.
-        
-        Args:
-            value (float): The measured value.
-            operator (str): The comparison operator ('>', '<', '>=', '<=', '==', '!=').
-            threshold (float): The threshold value to compare against.
-            
-        Returns:
-            bool: True if the condition is met, False otherwise.
         """
-        logger.debug(f"Evaluating condition: {value} {operator} {threshold}")
-        
-        if operator == '>':
-            return value > threshold
-        elif operator == '<':
-            return value < threshold
-        elif operator == '>=':
-            return value >= threshold
-        elif operator == '<=':
-            return value <= threshold
-        elif operator == '==':
-            return value == threshold
-        elif operator == '!=':
-            return value != threshold
-        else:
-            logger.error(f"Unknown operator: {operator}")
+        try:
+            logger.debug(f"Evaluating condition: {value} {operator} {threshold}")
+            
+            if operator == '>':
+                return value > threshold
+            elif operator == '<':
+                return value < threshold
+            elif operator == '>=':
+                return value >= threshold
+            elif operator == '<=':
+                return value <= threshold
+            elif operator == '==':
+                return value == threshold
+            elif operator == '!=':
+                return value != threshold
+            else:
+                logger.error(f"Unknown operator: {operator}")
+                return False
+        except Exception as e:
+            logger.error(f"Error in condition evaluation: {e}")
             return False
     
-    async def _handle_task_triggered(self, task_id: str, task: Task, data: Dict[str, float]):
+    async def _handle_task_triggered(self, task: Task, data: Dict[str, float]):
         """
         Handle a task being triggered (transition from not triggered to triggered).
-        
-        Args:
-            task_id (str): The task identifier.
-            task (Task): The task configuration.
-            data (Dict[str, float]): The data that triggered the task.
         """
-        logger.info(f"Task '{task.name}' ({task_id}) triggered")
+        logger.info(f"Task '{task.name}' ({task.id}) triggered")
         
-        # Execute all actions for this task
+        # Execute all actions for this task concurrently with semaphore
+        action_tasks = []
         for action in task.actions:
-            await self._execute_action(action, task, data)
+            action_tasks.append(self._execute_action_with_semaphore(action, task, data))
+        
+        await asyncio.gather(*action_tasks, return_exceptions=True)
     
-    async def _handle_task_cleared(self, task_id: str, task: Task, data: Dict[str, float]):
+    async def _handle_task_cleared(self, task: Task, data: Dict[str, float]):
         """
         Handle a task being cleared (transition from triggered to not triggered).
-        
-        Args:
-            task_id (str): The task identifier.
-            task (Task): The task configuration.
-            data (Dict[str, float]): The data that cleared the task.
         """
-        logger.info(f"Task '{task.name}' ({task_id}) cleared")
-        # No specific actions for clearing in this implementation
+        logger.info(f"Task '{task.name}' ({task.id}) cleared")
+        # For now, no specific actions for clearing
+        # Could add notification or cleanup actions here if needed
+    
+    async def _execute_action_with_semaphore(self, action: TaskAction, task: Task, data: Dict[str, float]):
+        """Execute an action with semaphore control."""
+        async with self._action_semaphore:
+            await self._execute_action(action, task, data)
     
     async def _execute_action(self, action: TaskAction, task: Task, data: Dict[str, float]):
         """
-        Execute a single action from a task.
-        
-        Args:
-            action (TaskAction): The action to execute.
-            task (Task): The parent task.
-            data (Dict[str, float]): The data that triggered the task.
+        Execute a single action from a task with enhanced error handling.
         """
         try:
             if action.type == "io":
@@ -163,14 +208,25 @@ class TaskManager:
             else:
                 logger.error(f"Unknown action type: {action.type}")
         except Exception as e:
-            logger.error(f"Error executing action: {e}")
+            logger.error(f"Error executing action {action.type} for task {task.id}: {e}", exc_info=True)
+            
+            # Store error in Redis for monitoring
+            try:
+                error_key = f"task_error:{task.id}:{action.type}"
+                error_data = {
+                    "error": str(e),
+                    "timestamp": time.time(),
+                    "task_name": task.name,
+                    "action_type": action.type
+                }
+                self.redis_client.set(error_key, json.dumps(error_data))
+                self.redis_client.expire(error_key, 86400)  # Expire after 24 hours
+            except Exception as redis_error:
+                logger.error(f"Failed to store error in Redis: {redis_error}")
     
     async def _execute_io_action(self, action: TaskAction):
         """
-        Execute an IO action (relay control).
-        
-        Args:
-            action (TaskAction): The IO action to execute.
+        Execute an IO action (relay control) with retry logic.
         """
         if not action.target or not action.state:
             logger.error("IO action missing target or state")
@@ -179,39 +235,74 @@ class TaskManager:
         target = action.target
         state = action.state.lower()
         
-        if state == "on":
-            result = await self.relay_manager.set_relay_on(target)
-            logger.info(f"IO action: turned relay {target} ON - Success: {result}")
-        elif state == "off":
-            result = await self.relay_manager.set_relay_off(target)
-            logger.info(f"IO action: turned relay {target} OFF - Success: {result}")
-        elif state == "pulse":
-            relay_config = self.relay_manager.get_relay_by_id(target)
-            pulse_time = relay_config.pulse_time if relay_config else 5
-            result = await self.relay_manager.pulse_relay(target, pulse_time)
-            logger.info(f"IO action: pulsed relay {target} for {pulse_time}s - Success: {result}")
-        else:
-            logger.error(f"Unknown IO state: {state}")
+        max_retries = 3
+        retry_delay = 1  # seconds
+        
+        for attempt in range(max_retries):
+            try:
+                if state == "on":
+                    result = await self.relay_manager.set_relay_on(target)
+                    logger.info(f"IO action: turned relay {target} ON - Success: {result}")
+                elif state == "off":
+                    result = await self.relay_manager.set_relay_off(target)
+                    logger.info(f"IO action: turned relay {target} OFF - Success: {result}")
+                elif state == "pulse":
+                    relay_config = self.relay_manager.get_relay_by_id(target)
+                    pulse_time = relay_config.pulse_time if relay_config else 5
+                    result = await self.relay_manager.pulse_relay(target, pulse_time)
+                    logger.info(f"IO action: pulsed relay {target} for {pulse_time}s - Success: {result}")
+                else:
+                    logger.error(f"Unknown IO state: {state}")
+                    return
+                
+                if result:
+                    return  # Success
+                
+            except Exception as e:
+                logger.error(f"Attempt {attempt + 1}/{max_retries} failed for IO action on {target}: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                else:
+                    logger.error(f"All retry attempts failed for IO action on {target}")
     
     async def _execute_log_action(self, action: TaskAction, task: Task, data: Dict[str, float]):
         """
-        Execute a log action.
-        
-        Args:
-            action (TaskAction): The log action to execute.
-            task (Task): The parent task.
-            data (Dict[str, float]): The data that triggered the task.
+        Execute a log action with enhanced logging.
         """
         message = action.message or f"Alert from task '{task.name}'"
         logger.info(f"Task '{task.name}' triggered log action: {message}")
         logger.info(f"Task data: {data}")
+        
+        # Store log action in Redis for monitoring
+        try:
+            log_key = f"task_log:{task.id}:{int(time.time())}"
+            log_data = {
+                "task_name": task.name,
+                "message": message,
+                "data": data,
+                "timestamp": time.time()
+            }
+            self.redis_client.set(log_key, json.dumps(log_data))
+            self.redis_client.expire(log_key, 604800)  # Expire after 7 days
+        except Exception as e:
+            logger.error(f"Failed to store log action in Redis: {e}")
     
     async def _execute_reboot_action(self):
         """
-        Execute a reboot action.
+        Execute a reboot action with safety checks.
         """
         logger.warning("System reboot requested by task action")
         try:
+            # Check if we're already scheduled for reboot
+            reboot_key = "system_reboot_scheduled"
+            if self.redis_client.exists(reboot_key):
+                logger.info("System reboot already scheduled, skipping")
+                return
+            
+            # Schedule the reboot
+            self.redis_client.set(reboot_key, "1")
+            self.redis_client.expire(reboot_key, 60)  # Expire after 1 minute
+            
             # Schedule the reboot to happen after a short delay
             asyncio.create_task(self._delayed_reboot())
         except Exception as e:
@@ -220,9 +311,6 @@ class TaskManager:
     async def _delayed_reboot(self, delay: int = 5):
         """
         Reboot the system after a delay.
-        
-        Args:
-            delay (int): Delay in seconds before rebooting.
         """
         logger.warning(f"System will reboot in {delay} seconds")
         await asyncio.sleep(delay)
@@ -234,9 +322,6 @@ class TaskManager:
     async def run(self):
         """
         Start the task manager.
-        
-        Note: This method doesn't do much - it just sleeps for a long time.
-        Tasks are evaluated when data is received via the evaluate_data method.
         """
         if self._running:
             logger.warning("Task manager already running")
@@ -250,7 +335,10 @@ class TaskManager:
         try:
             while self._running:
                 await asyncio.sleep(60)  # Sleep for a minute
-                logger.debug("Task manager running...")
+                
+                # Optional: Perform periodic housekeeping
+                await self._perform_housekeeping()
+                
         except asyncio.CancelledError:
             logger.info("Task manager cancelled")
             raise
@@ -259,12 +347,29 @@ class TaskManager:
         finally:
             self._running = False
     
+    async def _perform_housekeeping(self):
+        """Perform periodic housekeeping tasks."""
+        try:
+            # Check Redis connection
+            if not self.redis_client.ping():
+                logger.warning("Redis connection lost, attempting to reconnect")
+                self.redis_client = redis.Redis.from_url('redis://redis:6379/0', decode_responses=True)
+                
+            # Log task manager status
+            logger.debug(f"Task manager status: {len(self.task_states)} tasks tracked")
+        except Exception as e:
+            logger.error(f"Error in housekeeping: {e}")
+    
     async def shutdown(self):
         """
-        Shut down the task manager.
+        Shut down the task manager gracefully.
         """
         if not self._running:
             return
         
         self._running = False
         logger.info("Shutting down task manager")
+        
+        # Save all task states
+        for task_id, state in self.task_states.items():
+            self._save_task_state(task_id, state)

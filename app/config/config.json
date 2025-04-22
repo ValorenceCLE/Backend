@@ -213,8 +213,9 @@
             }
         }
     ],
-    "tasks": {
-        "1": {
+    "tasks": [
+        {
+            "id": "1",
             "name": "Test",
             "source": "relay_1",
             "field": "volts",
@@ -228,7 +229,8 @@
                 }
             ]
         },
-        "2": {
+        {
+            "id": "2",
             "name": "Test 2",
             "source": "relay_2",
             "field": "volts",
@@ -242,5 +244,5 @@
                 }
             ]
         }
-    }
-  }
+    ]
+}

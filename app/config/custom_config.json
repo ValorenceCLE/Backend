@@ -1,6 +1,6 @@
 {
     "general": {
-        "system_name": "R&D Test System",
+        "system_name": "R&D Test System - 79B2",
         "system_id": "10000000bb6b64b8",
         "version": "1.0.0",
         "agency": "Valorence",
@@ -213,8 +213,9 @@
             }
         }
     ],
-    "tasks": {
-        "1": {
+    "tasks": [
+        {
+            "id": "1",
             "name": "Test",
             "source": "relay_1",
             "field": "volts",
@@ -228,7 +229,8 @@
                 }
             ]
         },
-        "2": {
+        {
+            "id": "2",
             "name": "Test 2",
             "source": "relay_2",
             "field": "volts",
@@ -238,9 +240,22 @@
                 {
                     "type": "io",
                     "target": "relay_2",
-                    "state": "off"
+                    "state": "on"
+                }
+            ]
+        },
+        {
+            "id": "3",
+            "name": "Too Hot",
+            "source": "environmental",
+            "field": "temperature",
+            "operator": ">",
+            "value": 100,
+            "actions": [
+                {
+                    "type": "reboot"
                 }
             ]
         }
-    }
+    ]
 }

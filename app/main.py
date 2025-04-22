@@ -1,5 +1,5 @@
 """
-Main entry point for the DPM FastAPI backend application.
+Main entry point for the FastAPI backend application.
 
 This module initializes and starts the FastAPI application, sets up
 routing for API endpoints, and configures middleware.
