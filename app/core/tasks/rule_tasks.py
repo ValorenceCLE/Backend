@@ -1,4 +1,5 @@
 """
+app/core/tasks/rule_tasks.py
 Enhanced rule evaluation tasks with better state management and error handling.
 
 This module defines Celery tasks for evaluating sensor data against 
@@ -10,14 +11,14 @@ import json
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 from celery_app import app
-from app.utils.validator import load_config, Task, TaskAction
 from app.core.tasks.relay_tasks import set_relay_state, pulse_relay
+from app.core.services.config_manager import config_manager
+from app.core.env_settings import env
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 # Connect to Redis for persistent rule state
-redis_client = redis.Redis.from_url('redis://redis:6379/0')
+redis_client = redis.Redis.from_url(env.REDIS_URL)
 
 def get_rule_state(task_id):
     """Get the current state of a rule from Redis with error handling"""
@@ -48,15 +49,30 @@ def evaluate_rules(self, source: str, data: Dict[str, float]):
     logger.info(f"RULE EVALUATION: Source={source}, Data={data}")
     
     try:
-        # Load configuration to get tasks
-        config = load_config("app/config/custom_config.json")
+        # Get configuration using the manager
+        config = config_manager.get_full_config()
+        
+        # Check if tasks key exists
+        if "tasks" not in config:
+            logger.warning("No 'tasks' key in configuration, falling back to direct loading")
+            # Fall back to direct loading from file
+            try:
+                from app.utils.validator import load_config
+                pydantic_config = load_config("app/config/custom_config.json")
+                tasks_list = pydantic_config.tasks
+            except Exception as e:
+                logger.error(f"Failed to load tasks from file: {e}")
+                return False
+        else:
+            tasks_list = config["tasks"]
         
         # Build source-to-tasks mapping
         source_to_tasks = {}
-        for task in config.tasks:  # Now tasks is a list
-            if task.source not in source_to_tasks:
-                source_to_tasks[task.source] = []
-            source_to_tasks[task.source].append(task)
+        for task in tasks_list:
+            task_source = task["source"] if isinstance(task, dict) else task.source
+            if task_source not in source_to_tasks:
+                source_to_tasks[task_source] = []
+            source_to_tasks[task_source].append(task)
         
         # Skip if no tasks for this source
         if source not in source_to_tasks:
@@ -69,34 +85,52 @@ def evaluate_rules(self, source: str, data: Dict[str, float]):
         # Process each task
         for task in task_items:
             try:
+                # Handle both dictionary and Pydantic model approaches
+                if isinstance(task, dict):
+                    task_id = task["id"]
+                    task_name = task["name"]
+                    task_field = task["field"]
+                    task_operator = task["operator"]
+                    task_value = task["value"]
+                    task_actions = task["actions"]
+                else:  # Assume Pydantic model
+                    task_id = task.id
+                    task_name = task.name
+                    task_field = task.field
+                    task_operator = task.operator
+                    task_value = task.value
+                    task_actions = task.actions
+                
                 # Skip if the field doesn't exist in the data
-                if task.field not in data:
-                    logger.warning(f"Field '{task.field}' not in data for task '{task.name}' ({task.id})")
+                if task_field not in data:
+                    logger.warning(f"Field '{task_field}' not in data for task '{task_name}' ({task_id})")
                     continue
                 
                 # Evaluate the condition
-                value = data[task.field]
-                condition_met = _evaluate_condition(value, task.operator, task.value)
-                previously_triggered = get_rule_state(task.id)
+                value = data[task_field]
+                condition_met = _evaluate_condition(value, task_operator, task_value)
+                previously_triggered = get_rule_state(task_id)
                 
-                logger.info(f"RULE CHECK: Task '{task.name}' ({task.id}): {value} {task.operator} {task.value} = {condition_met}, previously_triggered={previously_triggered}")
+                logger.info(f"RULE CHECK: Task '{task_name}' ({task_id}): {value} {task_operator} {task_value} = {condition_met}, previously_triggered={previously_triggered}")
                 
                 # Handle state transitions
                 if condition_met and not previously_triggered:
                     # NOT TRIGGERED -> TRIGGERED
-                    logger.info(f"RULE TRIGGERED: Task '{task.name}' ({task.id})")
-                    set_rule_state(task.id, True)
+                    logger.info(f"RULE TRIGGERED: Task '{task_name}' ({task_id})")
+                    set_rule_state(task_id, True)
                     
                     # Execute actions for the task
-                    for action in task.actions:
-                        execute_action.delay(task.id, task.name, action.model_dump(), data)
+                    for action in task_actions:
+                        # If Pydantic model, convert to dict
+                        action_data = action if isinstance(action, dict) else action.model_dump()
+                        execute_action.delay(task_id, task_name, action_data, data)
                         
                 elif not condition_met and previously_triggered:
                     # TRIGGERED -> NOT TRIGGERED
-                    logger.info(f"RULE CLEARED: Task '{task.name}' ({task.id})")
-                    set_rule_state(task.id, False)
+                    logger.info(f"RULE CLEARED: Task '{task_name}' ({task_id})")
+                    set_rule_state(task_id, False)
             except Exception as e:
-                logger.error(f"Error processing task {task.id}: {e}", exc_info=True)
+                logger.error(f"Error processing task {task_id if 'task_id' in locals() else 'unknown'}: {e}", exc_info=True)
                 
         return True
     except Exception as e:
@@ -134,33 +168,33 @@ def execute_action(self, task_id: str, task_name: str, action_data: Dict, data: 
     Execute a single action as a separate task with retry logic.
     """
     try:
-        # Convert action_data back to TaskAction
-        action = TaskAction(**action_data)
+        # We're now receiving action_data as a dict, so we work directly with it
+        action_type = action_data.get("type")
         
-        logger.info(f"EXECUTING ACTION: {action.type} for task '{task_name}' ({task_id})")
+        logger.info(f"EXECUTING ACTION: {action_type} for task '{task_name}' ({task_id})")
         
-        if action.type == "io":
-            _execute_io_action(action)
-        elif action.type == "log":
-            _execute_log_action(action, task_name, data)
-        elif action.type == "reboot":
+        if action_type == "io":
+            _execute_io_action(action_data)
+        elif action_type == "log":
+            _execute_log_action(action_data, task_name, data)
+        elif action_type == "reboot":
             _execute_reboot_action()
         else:
-            logger.error(f"Unknown action type: {action.type}")
+            logger.error(f"Unknown action type: {action_type}")
     except Exception as e:
         logger.error(f"Error executing action: {e}", exc_info=True)
         self.retry(exc=e)
 
-def _execute_io_action(action: TaskAction):
+def _execute_io_action(action_data: Dict):
     """
     Execute an IO action (relay control) using Celery relay tasks.
     """
-    if not action.target or not action.state:
+    target = action_data.get("target")
+    state = action_data.get("state", "").lower() if action_data.get("state") else ""
+    
+    if not target or not state:
         logger.error("IO action missing target or state")
         return
-    
-    target = action.target
-    state = action.state.lower()
     
     try:
         if state == "on":
@@ -170,13 +204,15 @@ def _execute_io_action(action: TaskAction):
             set_relay_state.delay(target, False)
             logger.info(f"IO ACTION: Turning relay {target} OFF")
         elif state == "pulse":
-            # Default to 5 seconds if config lookup fails
-            pulse_time = 5
+            # Get pulse time from config
+            pulse_time = 5  # Default
             try:
-                config = load_config("app/config/custom_config.json")
-                relay_config = next((r for r in config.relays if r.id == target), None)
-                if relay_config:
-                    pulse_time = relay_config.pulse_time
+                config = config_manager.get_full_config()
+                if "relays" in config:
+                    for relay in config["relays"]:
+                        if relay.get("id") == target:
+                            pulse_time = relay.get("pulse_time", 5)
+                            break
             except Exception as e:
                 logger.error(f"Error getting pulse time: {e}")
                 
@@ -187,11 +223,11 @@ def _execute_io_action(action: TaskAction):
     except Exception as e:
         logger.error(f"Error executing IO action on {target}: {e}")
 
-def _execute_log_action(action: TaskAction, task_name: str, data: Dict[str, float]):
+def _execute_log_action(action_data: Dict, task_name: str, data: Dict[str, float]):
     """
     Execute a log action with enhanced monitoring.
     """
-    message = action.message or f"Alert from task '{task_name}'"
+    message = action_data.get("message") or f"Alert from task '{task_name}'"
     logger.info(f"TASK ALERT: {message}")
     logger.info(f"TASK DATA: {data}")
     
@@ -235,27 +271,54 @@ def get_rule_status():
     Get the status of all rules with enhanced error handling.
     """
     try:
-        # Load configuration
-        config = load_config("app/config/custom_config.json")
+        # Get config from config manager
+        config = config_manager.get_full_config()
+        
+        # Check if tasks key exists
+        if "tasks" not in config:
+            logger.debug("No 'tasks' key in configuration for rule status, falling back to direct loading")
+            # Fall back to direct loading from file
+            try:
+                from app.utils.validator import load_config
+                pydantic_config = load_config("app/config/custom_config.json")
+                tasks_list = pydantic_config.tasks
+            except Exception as e:
+                logger.error(f"Failed to load tasks from file for status: {e}")
+                return {"error": "Failed to load tasks"}
+        else:
+            tasks_list = config["tasks"]
         
         # Get states from Redis
         result = {}
-        for task in config.tasks:  # Now tasks is a list
-            task_id = task.id
+        for task in tasks_list:
+            # Handle both dictionary and Pydantic model
+            if isinstance(task, dict):
+                task_id = task["id"]
+                task_info = {
+                    "name": task["name"],
+                    "source": task["source"],
+                    "field": task["field"],
+                    "operator": task["operator"],
+                    "value": task["value"],
+                    "actions_count": len(task["actions"])
+                }
+            else:  # Assume Pydantic model
+                task_id = task.id
+                task_info = {
+                    "name": task.name,
+                    "source": task.source,
+                    "field": task.field,
+                    "operator": task.operator,
+                    "value": task.value,
+                    "actions_count": len(task.actions)
+                }
             
             # Get current state
             triggered = get_rule_state(task_id)
+            task_info["triggered"] = triggered
             
-            # Add task info
-            result[task_id] = {
-                "name": task.name,
-                "source": task.source,
-                "field": task.field,
-                "operator": task.operator,
-                "value": task.value,
-                "triggered": triggered,
-                "actions_count": len(task.actions)
-            }
+            # Add to result
+            result[task_id] = task_info
             
             # Add timestamps if available
             triggered_at = redis_client.get(f"rule_triggered_at:{task_id}")

@@ -33,3 +33,4 @@ celery==5.5.1
 python-dateutil==2.9.0
 pytz==2025.1
 aiocsv==1.3.2
+ipaddress==1.0.23

@@ -1,4 +1,5 @@
 """
+app/core/tasks.py
 Enhanced Task Manager for handling automated tasks and rules.
 
 This module processes data from sensors and executes actions based on configured rules.

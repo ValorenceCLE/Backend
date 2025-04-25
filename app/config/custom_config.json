@@ -245,8 +245,8 @@
             ]
         },
         {
-            "id": "3",
-            "name": "Too Hot",
+            "id": "95a51dbb-afb0-4d9b-97d6-8c1ebe6c5fe1",
+            "name": "Sys. Temp High",
             "source": "environmental",
             "field": "temperature",
             "operator": ">",

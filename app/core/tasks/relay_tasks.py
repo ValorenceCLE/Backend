@@ -1,4 +1,5 @@
 """
+app/core/tasks/relay_tasks.py
 Relay control and scheduling tasks.
 
 This module defines Celery tasks for controlling relays and managing
@@ -10,7 +11,9 @@ from datetime import datetime
 from typing import Dict, Any, List
 from celery_app import app
 from app.services.controller import RelayControl
-from app.utils.validator import load_config, RelayConfig
+from app.utils.validator import RelayConfig
+from app.core.env_settings import env
+from app.core.services.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
 
@@ -31,68 +34,121 @@ def check_schedules(self):
     logger.info("Checking relay schedules")
     
     try:
-        # Load current configuration
-        config = load_config("app/config/custom_config.json")
+        # Get configuration using the manager
+        config = config_manager.get_full_config()
+        
+        # Check if relays key exists
+        if "relays" not in config:
+            logger.warning("No 'relays' key in configuration, falling back to direct loading")
+            # Fall back to direct loading from file
+            try:
+                from app.utils.validator import load_config
+                pydantic_config = load_config("app/config/custom_config.json")
+                relays_list = pydantic_config.relays
+            except Exception as e:
+                logger.error(f"Failed to load relays from file: {e}")
+                return False
+        else:
+            relays_list = config["relays"]
         
         # Process each relay synchronously
-        for relay in config.relays:
+        for relay in relays_list:
+            # Handle both dictionary and Pydantic model
+            if isinstance(relay, dict):
+                relay_id = relay.get("id")
+                enabled = relay.get("enabled", False)
+                schedule = relay.get("schedule", {})
+                # Check if schedule is boolean False
+                if schedule is False:
+                    continue
+                schedule_enabled = schedule.get("enabled", False) if isinstance(schedule, dict) else False
+            else:  # Assume Pydantic model
+                relay_id = relay.id
+                enabled = relay.enabled
+                schedule = relay.schedule
+                # Check if schedule is boolean False
+                if schedule is False:
+                    continue
+                schedule_enabled = schedule.enabled if hasattr(schedule, "enabled") else False
+            
             # Skip disabled relays
-            if not relay.enabled:
+            if not enabled:
                 continue
                 
-            # Skip relays without a schedule
-            if not relay.schedule or not getattr(relay.schedule, "enabled", False):
+            # Skip relays without a schedule or with disabled schedule
+            if not schedule_enabled:
                 continue
                 
             # Check if the relay should be ON or OFF based on schedule
             should_be_on = _should_be_on(relay)
             
-            # Get current state - DIRECTLY without using get_relay_state
+            # Get current state directly
             try:
-                controller = RelayControl(relay.id)
+                controller = RelayControl(relay_id)
                 current_state = controller.state
                 is_on = current_state == 1
                 
                 # Update state if needed
                 if should_be_on != is_on:
-                    logger.info(f"Schedule: Setting relay {relay.id} to {'ON' if should_be_on else 'OFF'}")
+                    logger.info(f"Schedule: Setting relay {relay_id} to {'ON' if should_be_on else 'OFF'}")
                     if should_be_on:
-                        set_relay_state.delay(relay.id, True)
+                        set_relay_state.delay(relay_id, True)
                     else:
-                        set_relay_state.delay(relay.id, False)
+                        set_relay_state.delay(relay_id, False)
             except Exception as e:
-                logger.error(f"Error checking relay {relay.id}: {e}")
+                logger.error(f"Error checking relay {relay_id}: {e}")
         
         return True
     except Exception as e:
         logger.error(f"Error checking schedules: {e}")
         return False
 
-def _should_be_on(relay: RelayConfig) -> bool:
+def _should_be_on(relay) -> bool:
     """
     Determine if a relay should be ON based on its schedule and the current time.
     """
-    # Get schedule details
-    schedule = relay.schedule
-    if not hasattr(schedule, "enabled") or not schedule.enabled:
+    # Get schedule details - handle both dict and Pydantic model
+    if isinstance(relay, dict):
+        schedule = relay.get("schedule", {})
+        if schedule is False:
+            return False
+        
+        schedule_enabled = schedule.get("enabled", False) if isinstance(schedule, dict) else False
+        on_time = schedule.get("on_time") if isinstance(schedule, dict) else getattr(schedule, "on_time", None) 
+        off_time = schedule.get("off_time") if isinstance(schedule, dict) else getattr(schedule, "off_time", None)
+        days_mask = schedule.get("days_mask", 0) if isinstance(schedule, dict) else getattr(schedule, "days_mask", 0)
+    else:  # Pydantic model
+        schedule = relay.schedule
+        if schedule is False:
+            return False
+        
+        schedule_enabled = getattr(schedule, "enabled", False)
+        on_time = getattr(schedule, "on_time", None)
+        off_time = getattr(schedule, "off_time", None)
+        days_mask = getattr(schedule, "days_mask", 0)
+    
+    if not schedule_enabled:
         return False
         
     # Get current time and day of week
     now = datetime.now()
     current_time = now.strftime("%H:%M")
     
-    # Convert day of week to bitmask
-    # Monday=0 (bit 4), Tuesday=1 (bit 8), etc.
-    day_of_week = now.weekday()
-    day_bit = 4 << day_of_week  # Start at bit 2 (value 4)
+    # Get current day name
+    day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    current_day_name = day_names[now.weekday()]
+    
+    # Get day bit value from env settings
+    from app.core.env_settings import env
+    day_bit = env.DAY_BITMASK.get(current_day_name, 0)
     
     # Check if today is scheduled
-    if not (schedule.days_mask & day_bit):
+    if not (days_mask & day_bit):
         return False
         
-    # Get schedule times
-    on_time = schedule.on_time or "00:00"
-    off_time = schedule.off_time or "23:59"
+    # Use defaults if not specified
+    on_time = on_time or "00:00"
+    off_time = off_time or "23:59"
     
     # Handle schedules that span midnight
     if on_time > off_time:

@@ -1,20 +1,16 @@
-"""
-Main entry point for the FastAPI backend application.
-
-This module initializes and starts the FastAPI application, sets up
-routing for API endpoints, and configures middleware.
-"""
+# app/main.py
+# Update the main application entry point
 from contextlib import asynccontextmanager
 import json
-import aiofiles
-import uvicorn
-import ssl
+import logging
 from pathlib import Path
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-from app.utils.config import settings
+
+from app.core.services.config_manager import config_manager
+from app.core.env_settings import env
 from app.api.auth import router as auth_router
 from app.api.configuration import router as config_router
 from app.api.relay import router as relay_router
@@ -22,7 +18,6 @@ from app.api.network import router as network_router
 from app.api.device import router as device_router
 from app.api.sensors import router as sensors_router
 from app.api.timeseries import router as timeseries_router
-import logging
 
 # Configure logging
 logging.basicConfig(
@@ -31,48 +26,39 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# SSL Configuration for production
-ssl_context = None
-cert_file = Path("/app/certs/deviceCert.crt")
-key_file = Path("/app/certs/deviceCert.key")
-
-if cert_file.exists() and key_file.exists():
-    try:
-        ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-        ssl_context.load_cert_chain(certfile=cert_file, keyfile=key_file)
-        ssl_context.check_hostname = False
-        logger.info(f"SSL configuration loaded from {cert_file} and {key_file}")
-    except Exception as e:
-        logger.error(f"Error loading SSL certificates: {e}")
-        ssl_context = None
-else:
-    logger.warning(f"SSL certificates not found at {cert_file} and {key_file}, running without SSL")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Load config at startup
-    async with aiofiles.open("app/config/custom_config.json", "r") as file:
-        app.state.config = json.loads(await file.read())
+    """Application startup and shutdown lifecycle events."""
+    # Initialize configuration manager
+    config_success = await config_manager.initialize()
+    if not config_success:
+        logger.error("Failed to initialize configuration. Application may not function correctly.")
     
-    # Wait for databases to be ready 
+    # Store config in app state for backward compatibility during refactoring
+    app.state.config = config_manager.get_full_config()
+    
+    # Register a change listener to keep app.state.config updated
+    async def update_app_state_config(new_config):
+        app.state.config = new_config
+    await config_manager.register_listener(update_app_state_config)
     
     # Log application startup
-    logger.info("Application started")
+    logger.info(f"Application {env.APP_NAME} started")
     
     yield
-    
-    # Save config at shutdown
-    async with aiofiles.open("app/config/custom_config.json", "w") as file:
-        await file.write(json.dumps(app.state.config, indent=4))
     
     # Log application shutdown
     logger.info("Application shutting down")
 
-app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
-app.add_middleware(GZipMiddleware, minimum_size=1000)
+# Create FastAPI application
+app = FastAPI(
+    title=env.APP_NAME, 
+    description="FastAPI Backend Valorence Control System",
+    lifespan=lifespan
+)
 
-# CORS middleware
+# Add middleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -81,11 +67,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.exception_handler(HTTPException)
-async def custom_http_exception_handler(request: Request, exc: HTTPException):
+# Exception handler
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
-        status_code=exc.status_code,
-        content={"message": exc.detail},
+        status_code=500,
+        content={"message": "Internal server error"},
     )
 
 # Register API routers
@@ -97,13 +85,13 @@ app.include_router(device_router, prefix="/api")
 app.include_router(sensors_router, prefix="/api")
 app.include_router(timeseries_router, prefix="/api")
 
-# WebSocket endpoints are registered directly in the router modules
-
+# If running as a script
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(
-        "main:app",
+        "app.main:app",
         host="0.0.0.0",
         port=8000,
-        ssl_keyfile=key_file if ssl_context else None,
-        ssl_certfile=cert_file if ssl_context else None,
+        ssl_keyfile=env.SSL_KEY_FILE,
+        ssl_certfile=env.SSL_CERT_FILE,
     )

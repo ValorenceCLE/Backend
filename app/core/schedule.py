@@ -1,4 +1,5 @@
 """
+app/core/schedule.py
 Schedule Manager for managing relay schedules.
 
 This module handles the scheduling of relay state changes based on time and days of the week.
@@ -9,7 +10,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import logging
 from app.utils.validator import RelayConfig, RelaySchedule
-
+from app.core.env_settings import env
 
 logger = logging.getLogger("ScheduleManager")
 logger.setLevel(logging.INFO)
@@ -19,15 +20,7 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 # Day bit values - using the provided values
-DAY_VALUES = {
-    "Sunday": 2,
-    "Monday": 4,
-    "Tuesday": 8,
-    "Wednesday": 16,
-    "Thursday": 32,
-    "Friday": 64,
-    "Saturday": 128
-}
+DAY_VALUES = env.DAY_BITMASK
 
 class ScheduleManager:
     """

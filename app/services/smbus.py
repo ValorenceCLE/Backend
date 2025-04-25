@@ -2,6 +2,7 @@ import asyncio
 import logging
 from typing import Optional
 import smbus2
+from app.core.env_settings import env
 
 class INA260Sensor:
     _instances = {}
@@ -86,7 +87,29 @@ class INA260Sensor:
         except Exception as e:
             logging.error(f"Error reading all data from INA260 sensor at address {hex(self.address)}: {e}")
             return None
-
+        
+def get_sensor_for_relay(relay_id: str) -> Optional[INA260Sensor]:
+    """
+    Get INA260 sensor for a specific relay using configuration.
+    """
+    # Find sensor config for this relay
+    sensor_config = None
+    for sensor in env.INA260_SENSORS:
+        if sensor.get("relay_id") == relay_id:
+            sensor_config = sensor
+            break
+    
+    if not sensor_config:
+        logging.error(f"No sensor configuration found for relay {relay_id}")
+        return None
+    
+    try:
+        # Create sensor instance using address from config
+        address = sensor_config["address"]
+        return INA260Sensor(address=address)
+    except Exception as e:
+        logging.error(f"Failed to create sensor for relay {relay_id}: {e}")
+        return None
 
 class SHT30Sensor:
     """

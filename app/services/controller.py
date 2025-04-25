@@ -11,6 +11,7 @@ import logging
 import gpiod
 from gpiod.line import Direction, Value
 from typing import Dict, Any, Optional, List
+from app.core.env_settings import env
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -29,16 +30,6 @@ class RelayControl:
     # Singleton instances per relay id
     _instances: Dict[str, "RelayControl"] = {}
     _init_lock = threading.Lock()
-
-    # Embedded hardware configuration
-    _hardware_config: Dict[str, Dict[str, Any]] = {
-        "relay_1": {"pin": 22, "normally": "closed"},  # Camera Disable
-        "relay_2": {"pin": 27, "normally": "closed"},  # Router Disable
-        "relay_3": {"pin": 17, "normally": "open"},    # Enable
-        "relay_4": {"pin": 4,  "normally": "open"},    # Enable
-        "relay_5": {"pin": 24, "normally": "open"},    # Enable
-        "relay_6": {"pin": 23, "normally": "open"},    # Fan Enable
-    }
 
     def __new__(cls, relay_id: str, *args, **kwargs):
         with cls._init_lock:
@@ -79,9 +70,10 @@ class RelayControl:
 
     def _get_hardware_info(self) -> Optional[Dict[str, Any]]:
         """
-        Retrieve hardware configuration for the relay.
+        Retrieve hardware configuration for the relay from environment settings.
         """
-        config = RelayControl._hardware_config.get(self.id)
+        # Get relay configuration from environment settings
+        config = env.HARDWARE_CONFIG.get(self.id)
         if config:
             logger.debug(f"Found configuration for relay '{self.id}': {config}")
         else:

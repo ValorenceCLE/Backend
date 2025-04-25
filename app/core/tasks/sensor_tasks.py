@@ -1,4 +1,5 @@
 """
+app/core/tasks/sensor_tasks.py
 Sensor data collection tasks.
 
 This module defines Celery tasks for collecting data from various sensors,
@@ -19,16 +20,9 @@ class SensorDataCollector:
         self.influx_writer = InfluxDBWriter()
         self.semaphore = asyncio.Semaphore(10)  # Limit concurrent sensor reads
         
-        # Sensor configurations
-        self.ina260_sensors = [
-            {"relay_id": "relay_1", "address": 0x44},
-            {"relay_id": "relay_2", "address": 0x45},
-            {"relay_id": "relay_3", "address": 0x46},
-            {"relay_id": "relay_4", "address": 0x47},
-            {"relay_id": "relay_5", "address": 0x48},
-            {"relay_id": "relay_6", "address": 0x49},
-            {"relay_id": "main", "address": 0x4B},
-        ]
+        # Get sensor configurations from settings
+        from app.core.env_settings import env
+        self.ina260_sensors = env.INA260_SENSORS
         
         # Sensor caches
         self._ina260_cache = {}
