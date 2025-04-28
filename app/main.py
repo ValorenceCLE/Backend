@@ -11,13 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.services.config_manager import config_manager
 from app.core.env_settings import env
-from app.api.auth import router as auth_router
-from app.api.configuration import router as config_router
-from app.api.relay import router as relay_router
-from app.api.network import router as network_router
-from app.api.device import router as device_router
-from app.api.sensors import router as sensors_router
-from app.api.timeseries import router as timeseries_router
+from app.api import api_router
 
 # Configure logging
 logging.basicConfig(
@@ -26,31 +20,37 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application startup and shutdown lifecycle events."""
-    # Initialize configuration manager
-    config_success = await config_manager.initialize()
-    if not config_success:
-        logger.error("Failed to initialize configuration. Application may not function correctly.")
-    
-    # Store config in app state for backward compatibility during refactoring
-    app.state.config = config_manager.get_full_config()
-    
-    # Register a change listener to keep app.state.config updated
-    async def update_app_state_config(new_config):
-        app.state.config = new_config
-    await config_manager.register_listener(update_app_state_config)
-    
-    # Log application startup
-    logger.info(f"Application {env.APP_NAME} started")
-    
-    yield
-    
-    # Log application shutdown
-    logger.info("Application shutting down")
+
 
 # Create FastAPI application
+app = FastAPI(
+    title=env.APP_NAME, 
+    description="FastAPI Backend Valorence Control System",
+)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handle application lifecycle events."""
+    try:
+        logger.info("Starting application initialization")
+        
+        # Initialize the configuration manager first
+        logger.info("Initializing configuration manager")
+        success = await config_manager.initialize()
+        
+        if success:
+            logger.info("Configuration manager initialized successfully")
+        else:
+            logger.error("Failed to initialize configuration manager")
+    except Exception as e:
+        logger.error(f"Error during application startup: {e}")
+    
+    yield  # This is where the application runs
+    
+    # Cleanup code (if any) would go here
+    logger.info("Shutting down application")
+
+# Use the lifespan for app lifecycle management
 app = FastAPI(
     title=env.APP_NAME, 
     description="FastAPI Backend Valorence Control System",
@@ -77,13 +77,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 # Register API routers
-app.include_router(auth_router, prefix="/api")
-app.include_router(config_router, prefix="/api")
-app.include_router(relay_router, prefix="/api")
-app.include_router(network_router, prefix="/api")
-app.include_router(device_router, prefix="/api")
-app.include_router(sensors_router, prefix="/api")
-app.include_router(timeseries_router, prefix="/api")
+app.include_router(api_router, prefix="/api")
 
 # If running as a script
 if __name__ == "__main__":

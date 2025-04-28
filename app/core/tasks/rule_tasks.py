@@ -8,8 +8,8 @@ defined rules and executing actions.
 import logging
 import redis
 import json
-from datetime import datetime, timezone
-from typing import Dict, Any, List
+from datetime import datetime
+from typing import Dict
 from celery_app import app
 from app.core.tasks.relay_tasks import set_relay_state, pulse_relay
 from app.core.services.config_manager import config_manager
@@ -46,7 +46,7 @@ def evaluate_rules(self, source: str, data: Dict[str, float]):
     """
     Evaluate a data point against all tasks that use this source.
     """
-    logger.info(f"RULE EVALUATION: Source={source}, Data={data}")
+    logger.debug(f"RULE EVALUATION: Source={source}, Data={data}")
     
     try:
         # Get configuration using the manager
@@ -54,7 +54,7 @@ def evaluate_rules(self, source: str, data: Dict[str, float]):
         
         # Check if tasks key exists
         if "tasks" not in config:
-            logger.warning("No 'tasks' key in configuration, falling back to direct loading")
+            logger.debug("No 'tasks' key in configuration, falling back to direct loading")
             # Fall back to direct loading from file
             try:
                 from app.utils.validator import load_config
@@ -76,11 +76,11 @@ def evaluate_rules(self, source: str, data: Dict[str, float]):
         
         # Skip if no tasks for this source
         if source not in source_to_tasks:
-            logger.info(f"No tasks found for source {source}")
+            logger.debug(f"No tasks found for source {source}")
             return True
         
         task_items = source_to_tasks[source]
-        logger.info(f"Found {len(task_items)} tasks for source {source}")
+        logger.debug(f"Found {len(task_items)} tasks for source {source}")
         
         # Process each task
         for task in task_items:
@@ -111,7 +111,7 @@ def evaluate_rules(self, source: str, data: Dict[str, float]):
                 condition_met = _evaluate_condition(value, task_operator, task_value)
                 previously_triggered = get_rule_state(task_id)
                 
-                logger.info(f"RULE CHECK: Task '{task_name}' ({task_id}): {value} {task_operator} {task_value} = {condition_met}, previously_triggered={previously_triggered}")
+                logger.debug(f"RULE CHECK: Task '{task_name}' ({task_id}): {value} {task_operator} {task_value} = {condition_met}, previously_triggered={previously_triggered}")
                 
                 # Handle state transitions
                 if condition_met and not previously_triggered:
@@ -217,7 +217,7 @@ def _execute_io_action(action_data: Dict):
                 logger.error(f"Error getting pulse time: {e}")
                 
             pulse_relay.delay(target, pulse_time)
-            logger.info(f"IO ACTION: Pulsing relay {target} for {pulse_time}s")
+            logger.debug(f"IO ACTION: Pulsing relay {target} for {pulse_time}s")
         else:
             logger.error(f"Unknown IO state: {state}")
     except Exception as e:

@@ -40,7 +40,7 @@ app.conf.update(
     result_serializer='json',
     timezone='UTC',
     enable_utc=True,
-    worker_concurrency=2,  # Increase to handle multiple tasks
+    worker_concurrency=1,  # Increase to handle multiple tasks
     worker_prefetch_multiplier=1,  # Only prefetch one task at a time
     worker_max_tasks_per_child=50,  # Restart workers occasionally to prevent memory leaks
     task_acks_late=True,

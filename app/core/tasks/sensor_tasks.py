@@ -287,7 +287,7 @@ def read_all_sensors(self):
     
     This task is scheduled to run periodically by Celery Beat.
     """
-    logger.info("Reading all sensors")
+    logger.debug("Reading all sensors")
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
