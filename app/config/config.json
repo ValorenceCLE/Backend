@@ -123,7 +123,7 @@
         },
         {
             "id": "relay_4",
-            "name": "IR Light",
+            "name": "Strobe Light",
             "enabled": true,
             "pulse_time": 60,
             "schedule": {
@@ -155,15 +155,10 @@
         },
         {
             "id": "relay_5",
-            "name": "Strobe Light",
+            "name": "IR Light",
             "enabled": true,
             "pulse_time": 360,
-            "schedule": {
-                "enabled": true,
-                "on_time": "18:00",
-                "off_time": "04:59",
-                "days_mask": 194
-            },
+            "schedule":false,
             "dashboard": {
                 "on_button": {
                     "show": true,

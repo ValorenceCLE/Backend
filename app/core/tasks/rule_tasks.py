@@ -171,7 +171,7 @@ def execute_action(self, task_id: str, task_name: str, action_data: Dict, data: 
         # We're now receiving action_data as a dict, so we work directly with it
         action_type = action_data.get("type")
         
-        logger.info(f"EXECUTING ACTION: {action_type} for task '{task_name}' ({task_id})")
+        logger.debug(f"EXECUTING ACTION: {action_type} for task '{task_name}' ({task_id})")
         
         if action_type == "io":
             _execute_io_action(action_data)
@@ -199,10 +199,10 @@ def _execute_io_action(action_data: Dict):
     try:
         if state == "on":
             set_relay_state.delay(target, True)
-            logger.info(f"IO ACTION: Turning relay {target} ON")
+            logger.debug(f"IO ACTION: Turning relay {target} ON")
         elif state == "off":
             set_relay_state.delay(target, False)
-            logger.info(f"IO ACTION: Turning relay {target} OFF")
+            logger.debug(f"IO ACTION: Turning relay {target} OFF")
         elif state == "pulse":
             # Get pulse time from config
             pulse_time = 5  # Default

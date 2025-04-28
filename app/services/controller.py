@@ -110,7 +110,6 @@ class RelayControl:
         """
         try:
             # Open the GPIO chip
-            chip = gpiod.Chip("/dev/gpiochip0")
             # Request the line temporarily as input to read its current state
             temp_request = gpiod.request_lines(
                 "/dev/gpiochip0",
@@ -198,7 +197,7 @@ class RelayControl:
         """
         Asynchronously turn the relay logical state ON.
         """
-        logger.info(f"Turning relay '{self.id}' ON.")
+        logger.debug(f"Turning relay '{self.id}' ON.")
         async with self._lock:
             return await asyncio.to_thread(self._change_state, 1)
 
@@ -206,7 +205,7 @@ class RelayControl:
         """
         Asynchronously turn the relay logical state OFF.
         """
-        logger.info(f"Turning relay '{self.id}' OFF.")
+        logger.debug(f"Turning relay '{self.id}' OFF.")
         async with self._lock:
             return await asyncio.to_thread(self._change_state, 0)
 

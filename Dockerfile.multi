@@ -34,6 +34,9 @@ ENV PYTHONUNBUFFERED=1
 ENTRYPOINT ["/bin/sh", "-c"]
 CMD ["\
   if [ \"$ROLE\" = 'worker' ]; then \
+    # Set an environment variable to identify worker process
+    export ROLE=worker && \
+    # Import app.worker module on startup but don't rely on its automatic execution
     celery -A celery_app worker --loglevel=ERROR --concurrency=1 --pool=solo; \
   elif [ \"$ROLE\" = 'beat' ]; then \
     celery -A celery_app beat --loglevel=ERROR --schedule=/app/celerybeat-schedule; \

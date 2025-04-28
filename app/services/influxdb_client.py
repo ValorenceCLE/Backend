@@ -129,7 +129,7 @@ class InfluxDBWriter:
         """Start the background flush task"""
         self._shutdown = False
         self._flush_task = asyncio.create_task(self._periodic_flush())
-        logger.info("Started InfluxDB writer background task")
+        logger.debug("Started InfluxDB writer background task")
     
     async def stop(self):
         """Stop the writer and flush remaining points"""
@@ -143,7 +143,7 @@ class InfluxDBWriter:
             
         # Final flush
         await self.flush()
-        logger.info("Stopped InfluxDB writer")
+        logger.debug("Stopped InfluxDB writer")
     
     async def write(self, point):
         """Queue a point for writing"""
@@ -181,7 +181,7 @@ class InfluxDBWriter:
                 org=self.connection_manager.org,
                 record=points_to_write
             )
-            logger.info(f"Successfully wrote {len(points_to_write)} points to InfluxDB")
+            logger.debug(f"Successfully wrote {len(points_to_write)} points to InfluxDB")
         except Exception as e:
             logger.error(f"Error writing batch to InfluxDB: {e}")
         finally:

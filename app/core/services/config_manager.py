@@ -13,7 +13,7 @@ from app.core.env_settings import env
 from app.core.models.config_models import ApplicationConfig  # You'll need to create this
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # Set to DEBUG for more verbose logging
+logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
 
 ConfigChangeListener = Callable[[Dict[str, Any]], Awaitable[None]]
 

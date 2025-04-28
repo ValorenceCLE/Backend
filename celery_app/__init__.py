@@ -2,6 +2,11 @@ from celery import Celery
 import redis
 import logging
 from celery.signals import worker_shutdown, worker_ready, task_failure, task_success
+try:
+    import app.worker
+except ImportError:
+    # This will be imported via the -I flag when the worker starts
+    pass
 
 # Configure root logger
 logging.basicConfig(level=logging.INFO, 
@@ -40,7 +45,7 @@ app.conf.update(
     result_serializer='json',
     timezone='UTC',
     enable_utc=True,
-    worker_concurrency=1,  # Increase to handle multiple tasks
+    worker_concurrency=4,  # Increase to handle multiple tasks
     worker_prefetch_multiplier=1,  # Only prefetch one task at a time
     worker_max_tasks_per_child=50,  # Restart workers occasionally to prevent memory leaks
     task_acks_late=True,
@@ -53,19 +58,19 @@ app.conf.update(
     beat_schedule={
         'read-sensors-every-5-seconds': {
             'task': 'app.core.tasks.sensor_tasks.read_all_sensors',
-            'schedule': 5.0,
+            'schedule': 10.0,
         },
         'check-schedules-every-minute': {
             'task': 'app.core.tasks.relay_tasks.check_schedules',
-            'schedule': 60.0,
+            'schedule': 45.0,
         },
         'monitor-system-every-10-seconds': {
             'task': 'app.core.tasks.monitoring_tasks.monitor_system',
-            'schedule': 10.0,
+            'schedule': 16.0,
         },
         'check-network-every-minute': {
             'task': 'app.core.tasks.monitoring_tasks.check_network_connectivity',
-            'schedule': 60.0,
+            'schedule': 31.0,
         }
     }
 )
@@ -77,6 +82,8 @@ def check_redis_connection(**kwargs):
         redis_client = redis.Redis.from_url('redis://redis:6379/0')
         redis_client.ping()
         logger.info("Successfully connected to Redis")
+        from app import worker
+        worker.init_worker()
     except redis.ConnectionError:
         logger.error("Cannot connect to Redis! Celery worker will not function properly.")
 

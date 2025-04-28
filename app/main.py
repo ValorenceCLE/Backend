@@ -1,14 +1,12 @@
 # app/main.py
 # Update the main application entry point
 from contextlib import asynccontextmanager
-import json
 import logging
-from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-
+from app.middleware import setup_middleware
 from app.core.services.config_manager import config_manager
 from app.core.env_settings import env
 from app.api import api_router
@@ -23,10 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 # Create FastAPI application
-app = FastAPI(
-    title=env.APP_NAME, 
-    description="FastAPI Backend Valorence Control System",
-)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -56,7 +50,7 @@ app = FastAPI(
     description="FastAPI Backend Valorence Control System",
     lifespan=lifespan
 )
-
+setup_middleware(app)
 # Add middleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
