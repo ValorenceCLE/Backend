@@ -1,6 +1,6 @@
 {
     "general": {
-        "system_name": "R&D Test System",
+        "system_name": "Valorence System",
         "system_id": "10000000bb6b64b8",
         "version": "1.0.0",
         "agency": "Valorence",
@@ -8,7 +8,7 @@
         "reboot_time": "04:00"
     },
     "network": {
-        "ip_address": "192.168.1.4",
+        "ip_address": "192.168.1.2",
         "subnet_mask": "255.255.255.0",
         "gateway": "192.168.1.1",
         "dhcp": true,
@@ -94,12 +94,7 @@
             "name": "Fan",
             "enabled": true,
             "pulse_time": 360,
-            "schedule": {
-                "enabled": true,
-                "on_time": "04:59",
-                "off_time": "18:00",
-                "days_mask": 254
-            },
+            "schedule": false,
             "dashboard": {
                 "on_button": {
                     "show": true,
@@ -123,26 +118,21 @@
         },
         {
             "id": "relay_4",
-            "name": "Strobe Light",
+            "name": "IR Light",
             "enabled": true,
             "pulse_time": 60,
-            "schedule": {
-                "enabled": true,
-                "on_time": "18:00",
-                "off_time": "04:59",
-                "days_mask": 254
-            },
+            "schedule":false,
             "dashboard": {
                 "on_button": {
                     "show": true,
                     "status_text": "On",
-                    "status_color": "red",
+                    "status_color": "green",
                     "button_label": "On"
                 },
                 "off_button": {
                     "show": true,
                     "status_text": "Off",
-                    "status_color": "green",
+                    "status_color": "red",
                     "button_label": "Off"
                 },
                 "pulse_button": {
@@ -155,7 +145,7 @@
         },
         {
             "id": "relay_5",
-            "name": "IR Light",
+            "name": "Strobe Light",
             "enabled": true,
             "pulse_time": 360,
             "schedule":false,
@@ -163,13 +153,13 @@
                 "on_button": {
                     "show": true,
                     "status_text": "On",
-                    "status_color": "red",
+                    "status_color": "green",
                     "button_label": "On"
                 },
                 "off_button": {
                     "show": true,
                     "status_text": "Off",
-                    "status_color": "green",
+                    "status_color": "red",
                     "button_label": "Off"
                 },
                 "pulse_button": {
@@ -183,7 +173,7 @@
         {
             "id": "relay_6",
             "name": "Aux 1",
-            "enabled": true,
+            "enabled": false,
             "pulse_time": 15,
             "schedule": false,
             "dashboard": {
@@ -210,32 +200,15 @@
     ],
     "tasks": [
         {
-            "id": "1",
-            "name": "Test",
-            "source": "relay_1",
-            "field": "volts",
+            "id": "95a51dbb-afb0-4d9b-97d6-8c1ebe6c5fe1",
+            "name": "Sys. Temp High",
+            "source": "environmental",
+            "field": "temperature",
             "operator": ">",
-            "value": 5,
+            "value": 100,
             "actions": [
                 {
-                    "type": "io",
-                    "target": "relay_3",
-                    "state": "on"
-                }
-            ]
-        },
-        {
-            "id": "2",
-            "name": "Test 2",
-            "source": "relay_2",
-            "field": "volts",
-            "operator": "<",
-            "value": 5,
-            "actions": [
-                {
-                    "type": "io",
-                    "target": "relay_2",
-                    "state": "off"
+                    "type": "reboot"
                 }
             ]
         }

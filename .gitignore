@@ -3,6 +3,6 @@ __pycache__/
 .env
 secrets/
 Backend.code-workspace
-custom_config.json
+Backend/app/config/custom_config.json
 /certs
 celerybeat-schedule
