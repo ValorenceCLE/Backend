@@ -1,17 +1,19 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Header
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from app.utils.config import settings
-from app.utils.internal_or_user import internal_or_user_auth
+from app.core.env_settings import env
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# Create an OAuth2 scheme that does not automatically raise an error.
+oauth2_scheme_internal = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
     """
     Verifies JWT token and returns user payload.
     """
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, env.SECRET_KEY, algorithms=[env.ALGORITHM])
         username: str = payload.get("sub")
         role: str = payload.get("role")
         if username is None or role is None:
@@ -33,7 +35,7 @@ async def verify_token_ws(token: str):
     Similar to get_current_user but doesn't use Depends.
     """
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, env.SECRET_KEY, algorithms=[env.ALGORITHM])
         username: str = payload.get("sub")
         role: str = payload.get("role")
         if username is None or role is None:
@@ -99,7 +101,7 @@ async def is_authenticated(token: str = Depends(oauth2_scheme)) -> bool:
     Returns True if valid, otherwise raises an HTTPException.
     """
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(token, env.SECRET_KEY, algorithms=[env.ALGORITHM])
         return True
     except JWTError:
         raise HTTPException(
@@ -107,3 +109,46 @@ async def is_authenticated(token: str = Depends(oauth2_scheme)) -> bool:
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+
+async def internal_or_user_auth(
+    x_internal_api_key: str = Header(None),
+    token: str = Depends(oauth2_scheme_internal)
+):
+    """
+    Combined authentication dependency that:
+      - If the request includes a valid internal header (X-Internal-API-Key), it returns
+        a dummy internal user.
+      - Otherwise, it falls back to verifying the provided JWT token.
+    """
+    INTERNAL_API_KEY = env.SECRET_KEY
+    
+    # Check for the internal key first.
+    if x_internal_api_key == INTERNAL_API_KEY:
+        # Internal call: bypass token-based auth.
+        return {"username": "internal", "role": "admin", "internal": True}
+    
+    # No (valid) internal key provided, so fall back to token-based auth.
+    if token:
+        try:
+            payload = jwt.decode(token, env.SECRET_KEY, algorithms=[env.ALGORITHM])
+            username: str = payload.get("sub")
+            role: str = payload.get("role")
+            if username is None or role is None:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid authentication credentials",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+            return {"username": username, "role": role}
+        except JWTError:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Could not validate credentials",
+            )
+    
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )

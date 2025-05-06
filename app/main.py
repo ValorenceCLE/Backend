@@ -11,16 +11,8 @@ from app.core.services.config_manager import config_manager
 from app.core.env_settings import env
 from app.api import api_router
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
-
-
-
-# Create FastAPI application
+logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

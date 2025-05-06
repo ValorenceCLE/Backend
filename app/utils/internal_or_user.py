@@ -2,7 +2,7 @@ import os
 from fastapi import Header, HTTPException, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from app.utils.config import settings
+from app.core.env_settings import env
 
 # Create an OAuth2 scheme that does not automatically raise an error.
 oauth2_scheme_internal = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
@@ -17,7 +17,7 @@ async def internal_or_user_auth(
         a dummy internal user.
       - Otherwise, it falls back to verifying the provided JWT token.
     """
-    INTERNAL_API_KEY = settings.SECRET_KEY
+    INTERNAL_API_KEY = env.SECRET_KEY
     
     # Check for the internal key first.
     if x_internal_api_key == INTERNAL_API_KEY:
@@ -27,7 +27,7 @@ async def internal_or_user_auth(
     # No (valid) internal key provided, so fall back to token-based auth.
     if token:
         try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            payload = jwt.decode(token, env.SECRET_KEY, algorithms=[env.ALGORITHM])
             username: str = payload.get("sub")
             role: str = payload.get("role")
             if username is None or role is None:

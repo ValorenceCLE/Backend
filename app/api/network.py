@@ -2,8 +2,8 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timedelta
-from typing import Dict, Optional
+from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
 

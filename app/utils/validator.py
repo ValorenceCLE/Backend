@@ -6,30 +6,19 @@ and provides utility functions for working with the configuration.
 """
 import json
 import os
-from typing import Dict, List, Optional, Union, Any
+from typing import List, Optional, Union, Any
 from pydantic import BaseModel, field_validator, model_validator, Field
 from datetime import datetime
 import ipaddress
 import logging
-
+from app.core.env_settings import env
 # Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("ConfigValidator")
-handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
 
 # Day bit values for schedule configuration
-DAY_VALUES = {
-    "Sunday": 2,
-    "Monday": 4,
-    "Tuesday": 8,
-    "Wednesday": 16,
-    "Thursday": 32,
-    "Friday": 64,
-    "Saturday": 128
-}
+DAY_VALUES = env.DAY_BITMASK
 # Max value for days_mask (all days combined)
 MAX_DAYS_MASK = sum(DAY_VALUES.values())
 

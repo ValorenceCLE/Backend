@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query, status
 from concurrent.futures import ThreadPoolExecutor
 import os
-from app.utils.dependencies import require_role, is_authenticated, verify_token_ws
+from app.utils.dependencies import require_role, verify_token_ws
 from app.utils.websocket_utils import (
     ws_manager, 
     websocket_connection, 

@@ -5,7 +5,8 @@ import time
 from typing import List, Dict, Any, Tuple
 from datetime import datetime
 
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
 
 SEM_LIMIT = 100
 semaphore = asyncio.Semaphore(SEM_LIMIT)

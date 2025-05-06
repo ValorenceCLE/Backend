@@ -2,9 +2,9 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 from pydantic import BaseModel
-from app.utils.config import settings
 from app.utils.security import authenticate_user, create_access_token
 import logging
+from app.core.env_settings import env
 
 # ✅ Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +31,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=env.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = await create_access_token(
         data={"sub": user["username"], "role": user["role"]},
         expires_delta=access_token_expires

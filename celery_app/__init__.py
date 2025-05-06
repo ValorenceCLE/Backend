@@ -2,19 +2,9 @@ from celery import Celery
 import redis
 import logging
 from celery.signals import worker_shutdown, worker_ready, task_failure, task_success
-try:
-    import app.worker
-except ImportError:
-    # This will be imported via the -I flag when the worker starts
-    pass
 
-# Configure root logger
-logging.basicConfig(level=logging.INFO, 
-                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-# Set specific module loggers
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
 
 # Set task-related loggers to INFO
 logging.getLogger('app.core.tasks.rule_tasks').setLevel(logging.INFO)

@@ -4,11 +4,10 @@ WebSocket endpoints for real-time data streaming.
 This module provides WebSocket endpoints for streaming real-time sensor data
 and system metrics to connected clients.
 """
-from fastapi import WebSocket, WebSocketDisconnect, Query, Depends, HTTPException, status, APIRouter
+from fastapi import WebSocket, WebSocketDisconnect, Query, HTTPException, status
 import asyncio
-import json
 import logging
-from typing import Dict, List, Optional, Any, Callable, Awaitable
+from typing import Dict, Any
 from app.utils.dependencies import verify_token_ws
 from app.utils.websocket_utils import (
     ws_manager, 

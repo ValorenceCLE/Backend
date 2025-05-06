@@ -1,7 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends, HTTPException, status
 import asyncio
 import logging
-from typing import Dict, Optional, Any
+from typing import Optional, Any
 from app.services.smbus import INA260Sensor, SHT30Sensor
 from app.utils.dependencies import verify_token_ws
 from app.utils.websocket_utils import (

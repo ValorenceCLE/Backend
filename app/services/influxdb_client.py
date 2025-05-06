@@ -1,8 +1,7 @@
 # app/services/influxdb_client.py
 import logging
 import asyncio
-import threading
-from typing import List, Optional, Dict
+from typing import List
 from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
 from influxdb_client.client.flux_table import FluxTable
 import time

@@ -5,22 +5,15 @@ Schedule Manager for managing relay schedules.
 This module handles the scheduling of relay state changes based on time and days of the week.
 """
 import asyncio
-import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 import logging
 from app.utils.validator import RelayConfig, RelaySchedule
 from app.core.env_settings import env
 
-logger = logging.getLogger("ScheduleManager")
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
-
-# Day bit values - using the provided values
-DAY_VALUES = env.DAY_BITMASK
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
+DAY_VALUES = env.DAY_BITMASK # Day bit values - using the provided values
 
 class ScheduleManager:
     """
@@ -38,9 +31,7 @@ class ScheduleManager:
         self.relay_manager = relay_manager
         self._running = False
         self._check_interval = 60  # Check schedules every minute
-        
-        # Keep track of the last state we set for each relay
-        self._relay_states: Dict[str, bool] = {}
+        self._relay_states: Dict[str, bool] = {} # Keep track of the last state we set for each relay
     
     def _should_be_on(self, relay_id: str, schedule: RelaySchedule) -> bool:
         """

@@ -6,22 +6,17 @@ This module processes data from sensors and executes actions based on configured
 Includes improved error handling, state management, and concurrent task execution.
 """
 import asyncio
-import os
 import subprocess
 import time
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 import logging
 from app.utils.validator import Task, TaskAction
 from app.services.controller import RelayControl
 import redis
 import json
 
-logger = logging.getLogger("TaskManager")
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
 
 class TaskManager:
     """

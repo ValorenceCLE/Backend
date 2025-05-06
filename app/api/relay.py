@@ -1,19 +1,19 @@
 import logging
 from fastapi import APIRouter, HTTPException, status, Request, Depends
-from app.utils.internal_or_user import internal_or_user_auth
+from app.utils.dependencies import internal_or_user_auth
 from celery_app import app as celery_app
-from celery.result import AsyncResult
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 router = APIRouter(
     prefix="/io",
-    tags=["Relay API"]
+    tags=["Relay API"],
+    dependencies=[Depends(internal_or_user_auth)]
 )
 
 # Use the combined dependency for authentication.
-@router.post("/{relay_id}/state/on", dependencies=[Depends(internal_or_user_auth)])
+@router.post("/{relay_id}/state/on")
 async def turn_relay_on(relay_id: str) -> dict:
     """Submit a Celery task to turn relay on"""
     try:
@@ -39,7 +39,7 @@ async def turn_relay_on(relay_id: str) -> dict:
             detail=str(e)
         )
 
-@router.post("/{relay_id}/state/off", dependencies=[Depends(internal_or_user_auth)])
+@router.post("/{relay_id}/state/off")
 async def turn_relay_off(relay_id: str) -> dict:
     """Submit a Celery task to turn relay off"""
     try:
@@ -65,7 +65,7 @@ async def turn_relay_off(relay_id: str) -> dict:
             detail=str(e)
         )
 
-@router.post("/{relay_id}/state/pulse", dependencies=[Depends(internal_or_user_auth)])
+@router.post("/{relay_id}/state/pulse")
 async def pulse_relay(relay_id: str, request: Request) -> dict:
     """Submit a Celery task to pulse a relay"""
     try:
@@ -109,7 +109,7 @@ async def pulse_relay(relay_id: str, request: Request) -> dict:
             detail=str(e)
         )
 
-@router.get("/relays/state", dependencies=[Depends(internal_or_user_auth)])
+@router.get("/relays/state")
 async def get_all_relay_states(request: Request) -> dict:
     """Get states of all relays via Celery task"""
     try:
@@ -133,7 +133,7 @@ async def get_all_relay_states(request: Request) -> dict:
             detail=str(e)
         )
 
-@router.get("/relays/enabled/state", dependencies=[Depends(internal_or_user_auth)])
+@router.get("/relays/enabled/state")
 async def enabled_relay_states(request: Request) -> dict:
     """Get states of enabled relays via Celery task"""
     try:

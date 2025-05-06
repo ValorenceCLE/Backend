@@ -2,7 +2,7 @@
 from pydantic_settings import BaseSettings
 from pydantic import ValidationError
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any
 
 def get_env_path() -> Path:
     try:
@@ -49,7 +49,7 @@ class EnvSettings(BaseSettings):
         "relay_3": {"pin": 17, "normally": "open"},    # Enable
         "relay_4": {"pin": 4,  "normally": "open"},    # Enable
         "relay_5": {"pin": 24, "normally": "open"},    # Enable
-        "relay_6": {"pin": 23, "normally": "open"},    # Fan Enable
+        "relay_6": {"pin": 23, "normally": "open"},    # Enable
     }
     GPIO_CHIP: str = "/dev/gpiochip0"
 

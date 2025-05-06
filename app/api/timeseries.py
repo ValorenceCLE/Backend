@@ -1,6 +1,6 @@
 # app/api/timeseries.py
 from fastapi import APIRouter, Query, Depends, HTTPException
-from typing import Dict, List, Optional, Any
+from typing import Optional, Any
 from datetime import datetime, timedelta
 import logging
 from app.services.influxdb_client import InfluxDBReader
@@ -10,12 +10,12 @@ from app.utils.dependencies import is_authenticated
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-router = APIRouter(prefix="/timeseries", tags=["Time Series Data"])
+router = APIRouter(prefix="/timeseries", tags=["Time Series Data"], dependencies=[Depends(is_authenticated)])
 
 # Instantiate InfluxDB client
 influx_client = InfluxDBReader()
 
-@router.get("/query", dependencies=[Depends(is_authenticated)])
+@router.get("/query", )
 async def query_data(
     measurement: str = Query(..., description="Measurement name"),
     field: str = Query(..., description="Field to query"),
@@ -119,7 +119,7 @@ async def query_data(
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
 
 
-@router.get("/auto-interval", dependencies=[Depends(is_authenticated)])
+@router.get("/auto-interval")
 async def calculate_auto_interval(
     start_time: datetime = Query(..., description="Start time (ISO format)"),
     end_time: datetime = Query(..., description="End time (ISO format)"),
@@ -179,7 +179,7 @@ async def calculate_auto_interval(
         raise HTTPException(status_code=500, detail=f"Calculation failed: {str(e)}")
 
 
-@router.get("/available-intervals", dependencies=[Depends(is_authenticated)])
+@router.get("/available-intervals")
 async def get_available_intervals():
     """
     Return a list of available time intervals for aggregation.

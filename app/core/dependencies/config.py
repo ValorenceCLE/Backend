@@ -1,7 +1,5 @@
 # app/core/dependencies/config.py
 from fastapi import Depends
-from typing import Dict, Any, List, Optional
-
 from app.core.services.config_manager import config_manager
 
 async def get_config():

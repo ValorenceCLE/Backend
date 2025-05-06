@@ -5,7 +5,7 @@ across all WebSocket endpoints in the application.
 import asyncio
 import logging
 from typing import Dict, List, Optional, Any, Callable, Awaitable
-from fastapi import WebSocket, HTTPException, status
+from fastapi import WebSocket, status
 from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)

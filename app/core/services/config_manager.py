@@ -1,16 +1,12 @@
 # app/core/services/config_manager.py
 import asyncio
 import logging
-from pathlib import Path
 from typing import Dict, Any, List, Optional, Set, Callable, Awaitable
-from pydantic import ValidationError
 import copy
 import aiofiles
 import json
 import time
-
 from app.core.env_settings import env
-from app.core.models.config_models import ApplicationConfig  # You'll need to create this
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging

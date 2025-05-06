@@ -1,28 +1,18 @@
 # app/api/configuration.py
-# Add debug version with timeouts and better error handling
-from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks
-from typing import Dict, Any, Optional
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from typing import Dict, Any
 import asyncio
 import traceback
-import time
-
 from app.core.services.config_manager import config_manager
-from app.utils.dependencies import require_role, is_authenticated
+from app.utils.dependencies import require_role, is_authenticated, is_admin
 import logging
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)  # Set to DEBUG for more verbose logging
+logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
 
-router = APIRouter(prefix="/config", tags=["Admin API Configuration"])
+router = APIRouter(prefix="/config", tags=["Admin API Configuration"], dependencies=[Depends(is_admin)])
 
-# Add a health check endpoint to test basic router functionality
-@router.get("/health", summary="Configuration API health check")
-async def health_check():
-    """Simple health check to verify the API is responsive."""
-    logger.info("Config API health check called")
-    return {"status": "healthy", "timestamp": time.time()}
-
-@router.get("/", summary="Retrieve full configuration", dependencies=[Depends(is_authenticated)])
+@router.get("/", summary="Retrieve full configuration")
 async def get_full_config():
     """Get the full effective configuration with timeout protection."""
     try:
@@ -41,7 +31,24 @@ async def get_full_config():
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to retrieve configuration: {str(e)}")
     
-@router.get("/{config_section}", summary="Retrieve specific configuration section", dependencies=[Depends(is_authenticated)])
+
+@router.post("/", summary="Update full custom configuration")
+async def update_custom_config(new_config: Dict[str, Any], background_tasks: BackgroundTasks):
+    """Update the entire custom configuration in the background to avoid timeouts."""
+    try:
+        logger.debug("update_custom_config endpoint called")
+        
+        # Start a background task to update config
+        background_tasks.add_task(_update_config_task, new_config)
+        
+        logger.info("Configuration update started in background")
+        return {"message": "Configuration update started"}
+    except Exception as e:
+        logger.error(f"Error starting config update: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to start configuration update: {str(e)}")
+    
+@router.get("/{config_section}", summary="Retrieve specific configuration section")
 async def get_config_section(config_section: str):
     """Get a specific section of the configuration with timeout protection."""
     try:
@@ -63,23 +70,7 @@ async def get_config_section(config_section: str):
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to retrieve configuration section: {str(e)}")
     
-@router.post("/", summary="Update full custom configuration", dependencies=[Depends(require_role("admin"))])
-async def update_custom_config(new_config: Dict[str, Any], background_tasks: BackgroundTasks):
-    """Update the entire custom configuration in the background to avoid timeouts."""
-    try:
-        logger.debug("update_custom_config endpoint called")
-        
-        # Start a background task to update config
-        background_tasks.add_task(_update_config_task, new_config)
-        
-        logger.info("Configuration update started in background")
-        return {"message": "Configuration update started"}
-    except Exception as e:
-        logger.error(f"Error starting config update: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Failed to start configuration update: {str(e)}")
-    
-@router.post("/{config_section}", summary="Update specific configuration section", dependencies=[Depends(require_role("admin"))])
+@router.post("/{config_section}", summary="Update specific configuration section")
 async def update_config_section(config_section: str, new_config: Dict[str, Any], background_tasks: BackgroundTasks):
     """Update a specific section of the configuration in the background."""
     try:
@@ -95,7 +86,7 @@ async def update_config_section(config_section: str, new_config: Dict[str, Any],
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to start configuration section update: {str(e)}")
 
-@router.post("/revert", summary="Revert to default configuration", dependencies=[Depends(require_role("admin"))])
+@router.post("/revert", summary="Revert to default configuration")
 async def revert_to_defaults(background_tasks: BackgroundTasks):
     """Revert to default configuration by removing custom configuration in the background."""
     try:

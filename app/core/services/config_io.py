@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 import os
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
 
 class ConfigIO:
     """
