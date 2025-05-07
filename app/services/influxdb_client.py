@@ -26,7 +26,7 @@ class InfluxDBConnectionManager:
         if self._initialized:
             return
             
-        from app.utils.config import settings
+        from app.core.env_settings import env as settings
         self.url = settings.INFLUXDB_URL
         self.token = settings.DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
         self.org = settings.ORG

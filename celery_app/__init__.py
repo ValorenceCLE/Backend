@@ -2,6 +2,7 @@ from celery import Celery
 import redis
 import logging
 from celery.signals import worker_shutdown, worker_ready, task_failure, task_success
+import os  # Import os to access CPU core count
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
@@ -35,16 +36,15 @@ app.conf.update(
     result_serializer='json',
     timezone='UTC',
     enable_utc=True,
-    worker_concurrency=4,  # Increase to handle multiple tasks
-    worker_prefetch_multiplier=1,  # Only prefetch one task at a time
+    worker_prefetch_multiplier=4,  # Prefetch up to 4 tasks to improve throughput under high load
     worker_max_tasks_per_child=50,  # Restart workers occasionally to prevent memory leaks
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    task_time_limit=30,  # Set a time limit on tasks to prevent hanging
+    task_time_limit=300,  # Set a time limit on tasks to prevent hanging, adjusted for longer tasks
     worker_hijack_root_logger=False,
     worker_log_color=False,
     worker_redirect_stdouts=False,
-    worker_redirect_stdouts_level='ERROR',
+    worker_redirect_stdouts_level='INFO',
     beat_schedule={
         'read-sensors-every-5-seconds': {
             'task': 'app.core.tasks.sensor_tasks.read_all_sensors',
