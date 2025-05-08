@@ -117,8 +117,8 @@ class InfluxDBConnectionManager:
 class InfluxDBWriter:
     def __init__(self):
         self.connection_manager = InfluxDBConnectionManager()
-        self.batch_size = 20
-        self.flush_interval = 5  # seconds
+        self.batch_size = 100
+        self.flush_interval = 10  # seconds
         self.points_buffer = []
         self.buffer_lock = asyncio.Lock()
         self._shutdown = False

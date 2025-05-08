@@ -37,7 +37,8 @@ app.conf.update(
     timezone='UTC',
     enable_utc=True,
     worker_prefetch_multiplier=4,  # Prefetch up to 4 tasks to improve throughput under high load
-    worker_max_tasks_per_child=50,  # Restart workers occasionally to prevent memory leaks
+    worker_max_tasks_per_child=100,  # Restart workers after 100 tasks to prevent memory leaks and ensure clean state
+    worker_max_memory_per_child=150000,  # Restart worker if memory exceeds ~150MB to prevent memory bloat
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     task_time_limit=300,  # Set a time limit on tasks to prevent hanging, adjusted for longer tasks

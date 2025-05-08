@@ -1,15 +1,16 @@
 # app/main.py
 # Update the main application entry point
-from contextlib import asynccontextmanager
 import logging
+from contextlib import asynccontextmanager
+
+from app.api import api_router
+from app.core.env_settings import env
+from app.core.services.config_manager import config_manager
+from app.middleware import setup_middleware
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-from app.middleware import setup_middleware
-from app.core.services.config_manager import config_manager
-from app.core.env_settings import env
-from app.api import api_router
+from starlette.middleware.gzip import GZipMiddleware
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging

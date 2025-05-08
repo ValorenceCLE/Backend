@@ -8,9 +8,7 @@ hardware status, and network connectivity.
 import asyncio
 import logging
 import psutil
-import time
 from datetime import datetime, timezone
-from typing import Dict, Any
 from celery_app import app
 from app.services.influxdb_client import InfluxDBWriter
 
@@ -35,7 +33,7 @@ def monitor_system(self):
     try:
         # Collect metrics synchronously to avoid event loop issues
         # Collect CPU usage (non-blocking)
-        cpu_percent = psutil.cpu_percent(interval=0.1)  # Use shorter interval
+        cpu_percent = psutil.cpu_percent(interval=None)  # Use shorter interval
         
         # Collect memory usage
         memory = psutil.virtual_memory()
@@ -58,8 +56,9 @@ def monitor_system(self):
             "time": timestamp
         }
         
-        # Queue for storing (non-blocking)
-        write_influx_point.delay(point)
+        # Store directly in InfluxDB
+        influx_writer = InfluxDBWriter()
+        influx_writer.write(point)
         
         # Update WebSocket data (non-blocking)
         try:
@@ -73,7 +72,7 @@ def monitor_system(self):
         except Exception as e:
             logger.error(f"Error updating WebSocket data: {e}")
             
-        logger.debug(f"System metrics collected: CPU {cpu_percent}%, Memory {memory_percent}%, Disk {disk_percent}%")
+        logger.info(f"System metrics collected: CPU {cpu_percent}%, Memory {memory_percent}%, Disk {disk_percent}%")
         return {
             "cpu": cpu_percent,
             "memory": memory_percent,
@@ -83,7 +82,6 @@ def monitor_system(self):
         logger.error(f"Error monitoring system: {e}", exc_info=True)
         self.retry(exc=e)
         return None
-
 @app.task(
     bind=True,
     autoretry_for=(Exception,),
@@ -131,7 +129,8 @@ def check_network_connectivity(self):
             },
             "time": datetime.now(timezone.utc).isoformat()
         }
-        write_influx_point.delay(point)
+        influx_writer = InfluxDBWriter()
+        influx_writer.write(point)
         
         # Calculate overall status
         online = sum(1 for status in results.values() if status)
