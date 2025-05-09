@@ -11,8 +11,6 @@ from datetime import datetime
 from typing import Dict, Any, List
 from celery_app import app
 from app.services.controller import RelayControl
-from app.utils.validator import RelayConfig
-from app.core.env_settings import env
 from app.core.services.config_manager import config_manager
 
 logger = logging.getLogger(__name__)
@@ -212,7 +210,7 @@ def set_relay_state(self, relay_id: str, state: bool) -> Dict[str, Any]:
         loop.close()
 
 @app.task(bind=True, max_retries=3)
-def pulse_relay(self, relay_id: str, duration: float = 5.0) -> Dict[str, Any]:
+def pulse_relay(self, relay_id: str, duration: float) -> Dict[str, Any]:
     """
     Pulse a relay by toggling it, waiting for a duration, then toggling back.
     """

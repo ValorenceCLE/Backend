@@ -37,9 +37,9 @@ CMD ["\
     # Set an environment variable to identify worker process
     export ROLE=worker && \
     # Import app.worker module on startup but don't rely on its automatic execution
-    celery -A celery_app worker --loglevel=ERROR --concurrency=2 --pool=solo; \
+    celery -A celery_app worker --loglevel=INFO --concurrency=1 --pool=solo; \
   elif [ \"$ROLE\" = 'beat' ]; then \
-    celery -A celery_app beat --loglevel=ERROR --schedule=/app/celerybeat-schedule; \
+    celery -A celery_app beat --loglevel=INFO --schedule=/app/celerybeat-schedule; \
   else \
-    uvicorn app.main:app --workers=2 --host 0.0.0.0 --port 8000; \
+    uvicorn app.main:app --workers=4 --host 0.0.0.0 --port 8000; \
   fi"]

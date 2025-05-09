@@ -1,8 +1,9 @@
+# Backend/celery_app/__init__.py
 from celery import Celery
 import redis
 import logging
 from celery.signals import worker_shutdown, worker_ready, task_failure, task_success
-import os  # Import os to access CPU core count
+from app.core.env_settings import env
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
@@ -36,12 +37,9 @@ app.conf.update(
     result_serializer='json',
     timezone='UTC',
     enable_utc=True,
-    worker_prefetch_multiplier=4,  # Prefetch up to 4 tasks to improve throughput under high load
-    worker_max_tasks_per_child=100,  # Restart workers after 100 tasks to prevent memory leaks and ensure clean state
-    worker_max_memory_per_child=150000,  # Restart worker if memory exceeds ~150MB to prevent memory bloat
+    worker_prefetch_multiplier=1, 
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    task_time_limit=300,  # Set a time limit on tasks to prevent hanging, adjusted for longer tasks
     worker_hijack_root_logger=False,
     worker_log_color=False,
     worker_redirect_stdouts=False,
@@ -49,19 +47,15 @@ app.conf.update(
     beat_schedule={
         'read-sensors-every-5-seconds': {
             'task': 'app.core.tasks.sensor_tasks.read_all_sensors',
-            'schedule': 10.0,
+            'schedule': 5.0,
         },
         'check-schedules-every-minute': {
             'task': 'app.core.tasks.relay_tasks.check_schedules',
-            'schedule': 45.0,
+            'schedule': 60.0,
         },
         'monitor-system-every-10-seconds': {
             'task': 'app.core.tasks.monitoring_tasks.monitor_system',
-            'schedule': 16.0,
-        },
-        'check-network-every-minute': {
-            'task': 'app.core.tasks.monitoring_tasks.check_network_connectivity',
-            'schedule': 31.0,
+            'schedule': 10.0,
         }
     }
 )
