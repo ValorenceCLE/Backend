@@ -86,7 +86,7 @@ async def pulse_relay(relay_id: str, request: Request) -> dict:
             'app.core.tasks.relay_tasks.get_relay_state',
             args=[relay_id],
         )
-        state_result = state_task.get(timeout=10)
+        state_result = state_task.get(timeout=None)
         initial_state = state_result.get("state", 0)
         
         # Submit pulse task
