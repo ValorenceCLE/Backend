@@ -98,13 +98,13 @@
             "dashboard": {
                 "on_button": {
                     "show": true,
-                    "status_text": "ON",
+                    "status_text": "On",
                     "status_color": "green",
                     "button_label": "On"
                 },
                 "off_button": {
                     "show": true,
-                    "status_text": "OFF",
+                    "status_text": "Off",
                     "status_color": "red",
                     "button_label": "Off"
                 },
