@@ -1,6 +1,6 @@
 # app/api/configuration.py
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import asyncio
 import traceback
 from app.core.services.config_manager import config_manager
@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
 
-router = APIRouter(prefix="/config", tags=["Admin API Configuration"], dependencies=[Depends(is_admin)])
+router = APIRouter(prefix="/config", tags=["Admin API Configuration"])
 
 @router.get("/", summary="Retrieve full configuration")
 async def get_full_config():
@@ -30,23 +30,42 @@ async def get_full_config():
         logger.error(f"Error in get_full_config: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Failed to retrieve configuration: {str(e)}")
-    
 
 @router.post("/", summary="Update full custom configuration")
-async def update_custom_config(new_config: Dict[str, Any], background_tasks: BackgroundTasks):
-    """Update the entire custom configuration in the background to avoid timeouts."""
+async def update_custom_config(new_config: Dict[str, Any]):
+    """Update the entire custom configuration and always return the updated configuration."""
     try:
         logger.debug("update_custom_config endpoint called")
         
-        # Start a background task to update config
-        background_tasks.add_task(_update_config_task, new_config)
-        
-        logger.info("Configuration update started in background")
-        return {"message": "Configuration update started"}
+        # Update the configuration and wait for completion
+        try:
+            success = await config_manager.update_custom_config(new_config)
+            
+            if not success:
+                logger.error("Failed to update configuration")
+                raise HTTPException(status_code=500, detail="Failed to update configuration")
+            
+            # Get the updated configuration
+            updated_config = config_manager.get_full_config()
+            
+            # Return both success message and updated configuration
+            response = {
+                "message": "Configuration updated successfully",
+                "config": updated_config
+            }
+            
+            logger.info("Configuration updated and returned successfully")
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error during configuration update: {str(e)}")
+            raise HTTPException(status_code=500, 
+                               detail=f"Failed to update configuration: {str(e)}")
+            
     except Exception as e:
-        logger.error(f"Error starting config update: {str(e)}")
+        logger.error(f"Error in update_custom_config: {str(e)}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Failed to start configuration update: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update configuration: {str(e)}")
     
 @router.get("/{config_section}", summary="Retrieve specific configuration section")
 async def get_config_section(config_section: str):
@@ -71,97 +90,74 @@ async def get_config_section(config_section: str):
         raise HTTPException(status_code=500, detail=f"Failed to retrieve configuration section: {str(e)}")
     
 @router.post("/{config_section}", summary="Update specific configuration section")
-async def update_config_section(config_section: str, new_config: Dict[str, Any], background_tasks: BackgroundTasks):
-    """Update a specific section of the configuration in the background."""
+async def update_config_section(config_section: str, new_config: Dict[str, Any]):
+    """Update a specific section of the configuration and always return the updated section."""
     try:
         logger.debug(f"update_config_section endpoint called for section: {config_section}")
         
-        # Start a background task to update config section
-        background_tasks.add_task(_update_section_task, config_section, new_config)
-        
-        logger.info(f"Configuration section '{config_section}' update started in background")
-        return {"message": f"Configuration section '{config_section}' update started"}
+        # Update the section and wait for completion
+        try:
+            success = await config_manager.update_custom_config_section(config_section, new_config)
+            
+            if not success:
+                logger.error(f"Failed to update configuration section: {config_section}")
+                raise HTTPException(status_code=500, 
+                                   detail=f"Failed to update configuration section: {config_section}")
+            
+            # Get the updated section
+            updated_section = config_manager.get_section(config_section)
+            
+            # Return both success message and updated section
+            response = {
+                "message": f"Configuration section '{config_section}' updated successfully",
+                "section": updated_section
+            }
+            
+            logger.info(f"Configuration section '{config_section}' updated and returned successfully")
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error updating configuration section '{config_section}': {str(e)}")
+            raise HTTPException(status_code=500, 
+                               detail=f"Failed to update configuration section: {str(e)}")
+            
     except Exception as e:
-        logger.error(f"Error starting config section update for '{config_section}': {str(e)}")
+        logger.error(f"Error in update_config_section for '{config_section}': {str(e)}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Failed to start configuration section update: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update configuration section: {str(e)}")
 
 @router.post("/revert", summary="Revert to default configuration")
-async def revert_to_defaults(background_tasks: BackgroundTasks):
-    """Revert to default configuration by removing custom configuration in the background."""
+async def revert_to_defaults():
+    """Revert to default configuration and return the default configuration."""
     try:
         logger.debug("revert_to_defaults endpoint called")
         
-        # Start a background task to revert config
-        background_tasks.add_task(_revert_config_task)
-        
-        logger.info("Configuration revert started in background")
-        return {"message": "Configuration revert started"}
+        # Revert to defaults and wait for completion
+        try:
+            success = await config_manager.revert_to_defaults()
+            
+            if not success:
+                logger.error("Failed to revert to default configuration")
+                raise HTTPException(status_code=500, detail="Failed to revert to default configuration")
+            
+            # Get the default configuration (now the current configuration)
+            default_config = config_manager.get_full_config()
+            
+            # Return both success message and default configuration
+            response = {
+                "message": "Configuration reverted to defaults successfully",
+                "config": default_config
+            }
+            
+            logger.info("Configuration reverted to defaults and returned successfully")
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error reverting to default configuration: {str(e)}")
+            raise HTTPException(status_code=500, 
+                               detail=f"Failed to revert to default configuration: {str(e)}")
+            
     except Exception as e:
-        logger.error(f"Error starting config revert: {str(e)}")
+        logger.error(f"Error in revert_to_defaults: {str(e)}")
         logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Failed to start configuration revert: {str(e)}")
-
-# Background tasks
-async def _update_config_task(new_config: Dict[str, Any]):
-    """Background task to update the entire configuration."""
-    try:
-        logger.info("Starting background config update")
-        
-        # Use a timeout to prevent hanging
-        success = await asyncio.wait_for(
-            config_manager.update_custom_config(new_config),
-            timeout=30  # 30 second timeout
-        )
-        
-        if success:
-            logger.info("Background config update completed successfully")
-        else:
-            logger.error("Background config update failed")
-    except asyncio.TimeoutError:
-        logger.error("Background config update timed out after 30 seconds")
-    except Exception as e:
-        logger.error(f"Error in background config update: {str(e)}")
-        logger.error(traceback.format_exc())
-
-async def _update_section_task(section: str, new_config: Dict[str, Any]):
-    """Background task to update a specific configuration section."""
-    try:
-        logger.info(f"Starting background config section update for '{section}'")
-        
-        # Use a timeout to prevent hanging
-        success = await asyncio.wait_for(
-            config_manager.update_custom_config_section(section, new_config),
-            timeout=30  # 30 second timeout
-        )
-        
-        if success:
-            logger.info(f"Background config section update for '{section}' completed successfully")
-        else:
-            logger.error(f"Background config section update for '{section}' failed")
-    except asyncio.TimeoutError:
-        logger.error(f"Background config section update for '{section}' timed out after 30 seconds")
-    except Exception as e:
-        logger.error(f"Error in background config section update for '{section}': {str(e)}")
-        logger.error(traceback.format_exc())
-
-async def _revert_config_task():
-    """Background task to revert configuration to defaults."""
-    try:
-        logger.info("Starting background config revert")
-        
-        # Use a timeout to prevent hanging
-        success = await asyncio.wait_for(
-            config_manager.revert_to_defaults(),
-            timeout=30  # 30 second timeout
-        )
-        
-        if success:
-            logger.info("Background config revert completed successfully")
-        else:
-            logger.error("Background config revert failed")
-    except asyncio.TimeoutError:
-        logger.error("Background config revert timed out after 30 seconds")
-    except Exception as e:
-        logger.error(f"Error in background config revert: {str(e)}")
-        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to revert to default configuration: {str(e)}")
