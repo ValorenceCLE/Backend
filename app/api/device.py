@@ -13,6 +13,7 @@ from app.utils.websocket_utils import (
     safe_send_text, 
     safe_close
 )
+import subprocess
 
 router = APIRouter(prefix="/device", tags=["Device API"])
 executor = ThreadPoolExecutor()
@@ -160,22 +161,42 @@ async def get_router_log():
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/reboot", dependencies=[Depends(require_role("admin"))])
-async def reboot_device():
-    """
-    Endpoint to reboot the device.
-    """
-    try:
-        # Send response before rebooting
-        asyncio.create_task(reboot_system())
-        return {"message": "Device reboot initiated. The system will restart momentarily."}
-    except Exception as e:
-        logger.error(f"Error initiating reboot: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    
 async def reboot_system():
-    """
-    Perform the actual reboot after sending the response.
-    """
-    logger.info("Executing system reboot command")
-    await asyncio.sleep(1.0)  # Longer delay to ensure response is sent
-    os.system("sudo reboot")
+    """Reboot the Raspberry Pi CM5 using hardware watchdog"""
+    try:
+        logger.warning("System reboot requested via API using watchdog")
+        
+        # Check if watchdog device exists
+        if not os.path.exists('/dev/watchdog'):
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Watchdog device not available. Make sure it's enabled in the device tree."
+            )
+        
+        # Open the watchdog device
+        try:
+            with open('/dev/watchdog', 'w') as wdt:
+                # Writing a character other than 'V' and not closing properly
+                # will trigger the watchdog to reboot the system
+                wdt.write('X')
+                # Don't close the file - this will trigger the watchdog
+            
+            # Return success before the system reboots
+            return {"status": "success", "message": "Reboot initiated via watchdog timer"}
+        except PermissionError:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Permission denied when accessing watchdog. Check container privileges."
+            )
+            
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.exception(f"Failed to reboot system using watchdog: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reboot system: {str(e)}"
+        )
+
+

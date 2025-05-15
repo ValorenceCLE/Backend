@@ -220,20 +220,23 @@ def pulse_relay(self, relay_id: str, duration: float) -> Dict[str, Any]:
     try:
         controller = RelayControl(relay_id)
         
-        # Toggle the relay
-        loop.run_until_complete(controller.toggle())
+        # Toggle the relay immediately
+        initial_result = loop.run_until_complete(controller.toggle())
+        initial_state = initial_result.get("state")
         
-        # Wait for specified duration
-        loop.run_until_complete(asyncio.sleep(duration))
-        
-        # Toggle back
-        result = loop.run_until_complete(controller.toggle())
+        # Schedule a separate task to toggle it back after the duration
+        # This will run in a separate process/thread via Celery
+        toggle_back_task = set_relay_state.apply_async(
+            args=[relay_id, initial_state == 0],  # Toggle back to original state
+            countdown=duration  # Schedule to run after duration seconds
+        )
         
         return {
             "status": "success",
             "relay_id": relay_id,
-            "message": f"Relay pulsed for {duration} seconds",
-            "state": result.get("state")
+            "message": f"Relay pulse initiated for {duration} seconds",
+            "state": initial_state,
+            "toggle_back_task_id": toggle_back_task.id
         }
     except Exception as e:
         logger.exception(f"Error pulsing relay {relay_id}: {e}")
@@ -246,6 +249,7 @@ def pulse_relay(self, relay_id: str, duration: float) -> Dict[str, Any]:
         }
     finally:
         loop.close()
+
 
 @app.task(bind=True, max_retries=2)
 def get_all_relay_states(self, relay_ids: List[str]) -> Dict[str, int]:

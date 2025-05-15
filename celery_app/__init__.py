@@ -3,7 +3,6 @@ from celery import Celery
 import redis
 import logging
 from celery.signals import worker_shutdown, worker_ready, task_failure, task_success
-from app.core.env_settings import env
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Set to DEBUG for more verbose logging
@@ -26,7 +25,6 @@ app = Celery(
         'app.core.tasks.sensor_tasks',
         'app.core.tasks.relay_tasks',
         'app.core.tasks.rule_tasks',
-        'app.core.tasks.monitoring_tasks'
     ]
 )
 
@@ -52,10 +50,6 @@ app.conf.update(
         'check-schedules-every-minute': {
             'task': 'app.core.tasks.relay_tasks.check_schedules',
             'schedule': 60.0,
-        },
-        'monitor-system-every-10-seconds': {
-            'task': 'app.core.tasks.monitoring_tasks.monitor_system',
-            'schedule': 10.0,
         }
     }
 )

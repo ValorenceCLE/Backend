@@ -124,7 +124,7 @@ async def get_all_relay_states(request: Request) -> dict:
         )
         
         # Wait for result with timeout
-        result = task.get(timeout=5)
+        result = task.get(timeout=None)
         return result
     except Exception as e:
         logger.exception(f"Error getting all relay states: {e}")
@@ -148,7 +148,7 @@ async def enabled_relay_states(request: Request) -> dict:
         )
         
         # Wait for result with timeout
-        result = task.get(timeout=5)
+        result = task.get(timeout=None)
         return result
     except Exception as e:
         logger.exception(f"Error getting enabled relay states: {e}")
