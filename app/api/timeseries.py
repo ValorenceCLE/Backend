@@ -1,6 +1,6 @@
 # app/api/timeseries.py
 from fastapi import APIRouter, Query, Depends, HTTPException
-from typing import Optional, Any
+from typing import Optional
 from datetime import datetime, timedelta
 import logging
 from app.services.influxdb_client import InfluxDBReader

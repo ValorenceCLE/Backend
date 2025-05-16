@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, List
 from celery_app import app
 from app.services.controller import RelayControl
-from app.core.services.config_manager import config_manager
+from app.core.config import config_manager ##! New import for config manager
 
 logger = logging.getLogger(__name__)
 
@@ -33,24 +33,9 @@ def check_schedules(self):
     
     try:
         # Get configuration using the manager
-        config = config_manager.get_full_config()
-        
-        # Check if relays key exists
-        if "relays" not in config:
-            logger.warning("No 'relays' key in configuration, falling back to direct loading")
-            # Fall back to direct loading from file
-            try:
-                from app.utils.validator import load_config
-                pydantic_config = load_config("app/config/custom_config.json")
-                relays_list = pydantic_config.relays
-            except Exception as e:
-                logger.error(f"Failed to load relays from file: {e}")
-                return False
-        else:
-            relays_list = config["relays"]
-        
+        config = config_manager.get_config()
         # Process each relay synchronously
-        for relay in relays_list:
+        for relay in config.relays:
             # Handle both dictionary and Pydantic model
             if isinstance(relay, dict):
                 relay_id = relay.get("id")

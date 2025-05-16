@@ -13,7 +13,6 @@ from app.utils.websocket_utils import (
     safe_send_text, 
     safe_close
 )
-import subprocess
 
 router = APIRouter(prefix="/device", tags=["Device API"])
 executor = ThreadPoolExecutor()

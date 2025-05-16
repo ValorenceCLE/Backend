@@ -61,8 +61,6 @@ def check_redis_connection(**kwargs):
         redis_client = redis.Redis.from_url('redis://redis:6379/0')
         redis_client.ping()
         logger.info("Successfully connected to Redis")
-        from app import worker
-        worker.init_worker()
     except redis.ConnectionError:
         logger.error("Cannot connect to Redis! Celery worker will not function properly.")
 

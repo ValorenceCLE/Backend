@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Dict
 from celery_app import app
 from app.core.tasks.relay_tasks import set_relay_state, pulse_relay
-from app.core.services.config_manager import config_manager
+from app.core.config import config_manager  #! Updated import
 from app.core.env_settings import env
 
 logger = logging.getLogger(__name__)
@@ -49,30 +49,18 @@ def evaluate_rules(self, source: str, data: Dict[str, float]):
     logger.debug(f"RULE EVALUATION: Source={source}, Data={data}")
     
     try:
-        # Get configuration using the manager
-        config = config_manager.get_full_config()
+        # Get configuration using the new config manager with typed models
+        config = config_manager.get_config()
         
-        # Check if tasks key exists
-        if "tasks" not in config:
-            logger.debug("No 'tasks' key in configuration, falling back to direct loading")
-            # Fall back to direct loading from file
-            try:
-                from app.utils.validator import load_config
-                pydantic_config = load_config("app/config/custom_config.json")
-                tasks_list = pydantic_config.tasks
-            except Exception as e:
-                logger.error(f"Failed to load tasks from file: {e}")
-                return False
-        else:
-            tasks_list = config["tasks"]
+        # Access tasks directly from the model
+        tasks_list = config.tasks
         
         # Build source-to-tasks mapping
         source_to_tasks = {}
         for task in tasks_list:
-            task_source = task["source"] if isinstance(task, dict) else task.source
-            if task_source not in source_to_tasks:
-                source_to_tasks[task_source] = []
-            source_to_tasks[task_source].append(task)
+            if task.source not in source_to_tasks:
+                source_to_tasks[task.source] = []
+            source_to_tasks[task.source].append(task)
         
         # Skip if no tasks for this source
         if source not in source_to_tasks:
@@ -85,52 +73,36 @@ def evaluate_rules(self, source: str, data: Dict[str, float]):
         # Process each task
         for task in task_items:
             try:
-                # Handle both dictionary and Pydantic model approaches
-                if isinstance(task, dict):
-                    task_id = task["id"]
-                    task_name = task["name"]
-                    task_field = task["field"]
-                    task_operator = task["operator"]
-                    task_value = task["value"]
-                    task_actions = task["actions"]
-                else:  # Assume Pydantic model
-                    task_id = task.id
-                    task_name = task.name
-                    task_field = task.field
-                    task_operator = task.operator
-                    task_value = task.value
-                    task_actions = task.actions
-                
                 # Skip if the field doesn't exist in the data
-                if task_field not in data:
-                    logger.warning(f"Field '{task_field}' not in data for task '{task_name}' ({task_id})")
+                if task.field not in data:
+                    logger.warning(f"Field '{task.field}' not in data for task '{task.name}' ({task.id})")
                     continue
                 
                 # Evaluate the condition
-                value = data[task_field]
-                condition_met = _evaluate_condition(value, task_operator, task_value)
-                previously_triggered = get_rule_state(task_id)
+                value = data[task.field]
+                condition_met = _evaluate_condition(value, task.operator, task.value)
+                previously_triggered = get_rule_state(task.id)
                 
-                logger.debug(f"RULE CHECK: Task '{task_name}' ({task_id}): {value} {task_operator} {task_value} = {condition_met}, previously_triggered={previously_triggered}")
+                logger.debug(f"RULE CHECK: Task '{task.name}' ({task.id}): {value} {task.operator} {task.value} = {condition_met}, previously_triggered={previously_triggered}")
                 
                 # Handle state transitions
                 if condition_met and not previously_triggered:
                     # NOT TRIGGERED -> TRIGGERED
-                    logger.info(f"RULE TRIGGERED: Task '{task_name}' ({task_id})")
-                    set_rule_state(task_id, True)
+                    logger.info(f"RULE TRIGGERED: Task '{task.name}' ({task.id})")
+                    set_rule_state(task.id, True)
                     
                     # Execute actions for the task
-                    for action in task_actions:
-                        # If Pydantic model, convert to dict
-                        action_data = action if isinstance(action, dict) else action.model_dump()
-                        execute_action.delay(task_id, task_name, action_data, data)
+                    for action in task.actions:
+                        # Convert Pydantic model to dict for serialization
+                        action_data = action.model_dump()
+                        execute_action.delay(task.id, task.name, action_data, data)
                         
                 elif not condition_met and previously_triggered:
                     # TRIGGERED -> NOT TRIGGERED
-                    logger.info(f"RULE CLEARED: Task '{task_name}' ({task_id})")
-                    set_rule_state(task_id, False)
+                    logger.info(f"RULE CLEARED: Task '{task.name}' ({task.id})")
+                    set_rule_state(task.id, False)
             except Exception as e:
-                logger.error(f"Error processing task {task_id if 'task_id' in locals() else 'unknown'}: {e}", exc_info=True)
+                logger.error(f"Error processing task {task.id}: {e}", exc_info=True)
                 
         return True
     except Exception as e:
@@ -204,15 +176,14 @@ def _execute_io_action(action_data: Dict):
             set_relay_state.delay(target, False)
             logger.debug(f"IO ACTION: Turning relay {target} OFF")
         elif state == "pulse":
-            # Get pulse time from config
+            # Get pulse time from config using the new typed model
             pulse_time = 5  # Default
             try:
-                config = config_manager.get_full_config()
-                if "relays" in config:
-                    for relay in config["relays"]:
-                        if relay.get("id") == target:
-                            pulse_time = relay.get("pulse_time", 5)
-                            break
+                config = config_manager.get_config()
+                for relay in config.relays:
+                    if relay.id == target:
+                        pulse_time = relay.pulse_time
+                        break
             except Exception as e:
                 logger.error(f"Error getting pulse time: {e}")
                 
@@ -271,47 +242,22 @@ def get_rule_status():
     Get the status of all rules with enhanced error handling.
     """
     try:
-        # Get config from config manager
-        config = config_manager.get_full_config()
-        
-        # Check if tasks key exists
-        if "tasks" not in config:
-            logger.debug("No 'tasks' key in configuration for rule status, falling back to direct loading")
-            # Fall back to direct loading from file
-            try:
-                from app.utils.validator import load_config
-                pydantic_config = load_config("app/config/custom_config.json")
-                tasks_list = pydantic_config.tasks
-            except Exception as e:
-                logger.error(f"Failed to load tasks from file for status: {e}")
-                return {"error": "Failed to load tasks"}
-        else:
-            tasks_list = config["tasks"]
+        # Get config from the new config manager with typed models
+        config = config_manager.get_config()
+        tasks_list = config.tasks
         
         # Get states from Redis
         result = {}
         for task in tasks_list:
-            # Handle both dictionary and Pydantic model
-            if isinstance(task, dict):
-                task_id = task["id"]
-                task_info = {
-                    "name": task["name"],
-                    "source": task["source"],
-                    "field": task["field"],
-                    "operator": task["operator"],
-                    "value": task["value"],
-                    "actions_count": len(task["actions"])
-                }
-            else:  # Assume Pydantic model
-                task_id = task.id
-                task_info = {
-                    "name": task.name,
-                    "source": task.source,
-                    "field": task.field,
-                    "operator": task.operator,
-                    "value": task.value,
-                    "actions_count": len(task.actions)
-                }
+            task_id = task.id
+            task_info = {
+                "name": task.name,
+                "source": task.source,
+                "field": task.field,
+                "operator": task.operator,
+                "value": task.value,
+                "actions_count": len(task.actions)
+            }
             
             # Get current state
             triggered = get_rule_state(task_id)

@@ -1,7 +1,8 @@
 import logging
-from fastapi import APIRouter, HTTPException, status, Request, Depends
+from fastapi import APIRouter, HTTPException, status, Depends
 from app.utils.dependencies import internal_or_user_auth
 from celery_app import app as celery_app
+from app.core.config import config_manager  # Updated import path
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -66,20 +67,23 @@ async def turn_relay_off(relay_id: str) -> dict:
         )
 
 @router.post("/{relay_id}/state/pulse")
-async def pulse_relay(relay_id: str, request: Request) -> dict:
+async def pulse_relay(relay_id: str) -> dict:  # Removed Request parameter
     """Submit a Celery task to pulse a relay"""
     try:
+        # Get relay config from new config system instead of request.app.state
+        config = config_manager.get_config()
         relay_config = next(
-            (relay for relay in request.app.state.config.get("relays", []) if relay.get("id") == relay_id),
+            (relay for relay in config.relays if relay.id == relay_id),
             None
         )
+        
         if not relay_config:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Relay with ID '{relay_id}' not found in configuration."
             )
         
-        pulse_time = relay_config.get("pulse_time", 5)
+        pulse_time = relay_config.pulse_time
         
         # Get initial state first
         state_task = celery_app.send_task(
@@ -110,12 +114,12 @@ async def pulse_relay(relay_id: str, request: Request) -> dict:
         )
 
 @router.get("/relays/state")
-async def get_all_relay_states(request: Request) -> dict:
+async def get_all_relay_states() -> dict:  # Removed Request parameter
     """Get states of all relays via Celery task"""
     try:
-        # Get all relay IDs from config
-        relays = request.app.state.config.get("relays", [])
-        relay_ids = [relay.get("id") for relay in relays if relay.get("id")]
+        # Get all relay IDs from new config system
+        config = config_manager.get_config()
+        relay_ids = [relay.id for relay in config.relays]
         
         # Submit task to get all states at once
         task = celery_app.send_task(
@@ -124,7 +128,7 @@ async def get_all_relay_states(request: Request) -> dict:
         )
         
         # Wait for result with timeout
-        result = task.get(timeout=None)
+        result = task.get(timeout=5)
         return result
     except Exception as e:
         logger.exception(f"Error getting all relay states: {e}")
@@ -134,12 +138,13 @@ async def get_all_relay_states(request: Request) -> dict:
         )
 
 @router.get("/relays/enabled/state")
-async def enabled_relay_states(request: Request) -> dict:
+async def enabled_relay_states() -> dict:  # Removed Request parameter
     """Get states of enabled relays via Celery task"""
     try:
-        # Get enabled relay IDs from config
-        enabled_relays = [relay for relay in request.app.state.config.get("relays", []) if relay.get("enabled", False)]
-        relay_ids = [relay.get("id") for relay in enabled_relays if relay.get("id")]
+        # Get enabled relay IDs from new config system
+        config = config_manager.get_config()
+        enabled_relays = [relay for relay in config.relays if relay.enabled]
+        relay_ids = [relay.id for relay in enabled_relays]
         
         # Submit task to get enabled states at once
         task = celery_app.send_task(
@@ -148,7 +153,7 @@ async def enabled_relay_states(request: Request) -> dict:
         )
         
         # Wait for result with timeout
-        result = task.get(timeout=None)
+        result = task.get(timeout=5)
         return result
     except Exception as e:
         logger.exception(f"Error getting enabled relay states: {e}")

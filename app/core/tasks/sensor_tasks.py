@@ -8,7 +8,7 @@ processing the data, and storing it in InfluxDB.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional, List
+from typing import Optional
 from app.services.smbus import INA260Sensor, SHT30Sensor
 from app.services.influxdb_client import InfluxDBWriter
 from celery_app import app
