@@ -3,7 +3,7 @@ from fastapi import APIRouter, Query, Depends, HTTPException
 from typing import Optional
 from datetime import datetime, timedelta
 import logging
-from app.services.influxdb_client import InfluxDBReader
+from app.services.influxdb_client import InfluxDBClient
 from app.utils.dependencies import is_authenticated
 
 # Set up logging
@@ -13,7 +13,7 @@ logger.setLevel(logging.INFO)
 router = APIRouter(prefix="/timeseries", tags=["Time Series Data"], dependencies=[Depends(is_authenticated)])
 
 # Instantiate InfluxDB client
-influx_client = InfluxDBReader()
+influx_client = InfluxDBClient()
 
 @router.get("/query", )
 async def query_data(

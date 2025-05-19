@@ -78,7 +78,7 @@ async def websocket_usage(
         if not connected:
             return
             
-        logger.info(f"Starting system usage stream with {interval}ms interval")
+        logger.debug(f"Starting system usage stream with {interval}ms interval")
         
         try:
             consecutive_errors = 0

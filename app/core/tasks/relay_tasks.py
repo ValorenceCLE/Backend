@@ -1,137 +1,142 @@
 """
-app/core/tasks/relay_tasks.py
 Relay control and scheduling tasks.
 
-This module defines Celery tasks for controlling relays and managing
-their schedules.
+This module defines Celery tasks for controlling relays (on/off/pulse operations)
+and managing relay schedules based on configured time patterns.
 """
-import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from celery_app import app
+from app.core.tasks.common import run_task_with_new_loop, TaskMetrics
 from app.services.controller import RelayControl
-from app.core.config import config_manager ##! New import for config manager
+from app.core.env_settings import env
 
 logger = logging.getLogger(__name__)
 
-@app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
-    retry_backoff_max=300,
-    retry_jitter=True,
-    max_retries=3
-)
-def check_schedules(self):
+@app.task
+def check_schedules() -> Dict[str, Any]:
     """
     Check all relay schedules and update relay states as needed.
+    Runs periodically via Celery Beat.
     
-    This task is scheduled to run periodically by Celery Beat.
+    Returns:
+        Dict with schedule check results
     """
-    logger.info("Checking relay schedules")
-    
-    try:
-        # Get configuration using the manager
-        config = config_manager.get_config()
-        # Process each relay synchronously
-        for relay in config.relays:
-            # Handle both dictionary and Pydantic model
-            if isinstance(relay, dict):
-                relay_id = relay.get("id")
-                enabled = relay.get("enabled", False)
-                schedule = relay.get("schedule", {})
-                # Check if schedule is boolean False
-                if schedule is False:
+    with TaskMetrics("check_schedules") as metrics:
+        try:
+            # Get configuration
+            from app.core.config import config_manager
+            config = config_manager.get_config()
+            
+            # Track results
+            results = {
+                "checked": 0,
+                "updated": 0,
+                "errors": 0,
+                "relays": {}
+            }
+            
+            # Process each relay
+            for relay in config.relays:
+                # Skip disabled relays
+                if not relay.enabled:
                     continue
-                schedule_enabled = schedule.get("enabled", False) if isinstance(schedule, dict) else False
-            else:  # Assume Pydantic model
-                relay_id = relay.id
-                enabled = relay.enabled
+                    
+                # Skip relays without a schedule or with disabled schedule
                 schedule = relay.schedule
-                # Check if schedule is boolean False
-                if schedule is False:
+                if not schedule or not getattr(schedule, 'enabled', False):
                     continue
-                schedule_enabled = schedule.enabled if hasattr(schedule, "enabled") else False
+                    
+                relay_id = relay.id
+                metrics.increment("checked")
+                results["checked"] += 1
+                
+                try:
+                    # Determine if relay should be on
+                    should_be_on = _should_be_on(relay)
+                    
+                    # Get current state directly
+                    controller = RelayControl(relay_id)
+                    current_state = controller.state
+                    is_on = current_state == 1
+                    
+                    # Store relay check result
+                    results["relays"][relay_id] = {
+                        "name": relay.name,
+                        "current_state": "ON" if is_on else "OFF",
+                        "scheduled_state": "ON" if should_be_on else "OFF",
+                        "action_needed": should_be_on != is_on
+                    }
+                    
+                    # Update state if needed
+                    if should_be_on != is_on:
+                        logger.info(f"Schedule: Setting relay {relay_id} ({relay.name}) to {'ON' if should_be_on else 'OFF'}")
+                        
+                        if should_be_on:
+                            task = set_relay_state.delay(relay_id, True)
+                        else:
+                            task = set_relay_state.delay(relay_id, False)
+                            
+                        results["relays"][relay_id]["task_id"] = task.id
+                        results["updated"] += 1
+                        metrics.increment("updated")
+                except Exception as e:
+                    logger.error(f"Error checking relay {relay_id}: {e}")
+                    results["errors"] += 1
+                    metrics.increment("errors")
+                    results["relays"][relay_id] = {
+                        "error": str(e)
+                    }
             
-            # Skip disabled relays
-            if not enabled:
-                continue
-                
-            # Skip relays without a schedule or with disabled schedule
-            if not schedule_enabled:
-                continue
-                
-            # Check if the relay should be ON or OFF based on schedule
-            should_be_on = _should_be_on(relay)
+            # Add timestamp
+            results["timestamp"] = datetime.now().isoformat()
             
-            # Get current state directly
-            try:
-                controller = RelayControl(relay_id)
-                current_state = controller.state
-                is_on = current_state == 1
+            # Log summary
+            if results["updated"] > 0:
+                logger.info(f"Updated {results['updated']} relays based on schedules")
+            elif results["checked"] > 0:
+                logger.info(f"Checked {results['checked']} relay schedules - no updates needed")
                 
-                # Update state if needed
-                if should_be_on != is_on:
-                    logger.info(f"Schedule: Setting relay {relay_id} to {'ON' if should_be_on else 'OFF'}")
-                    if should_be_on:
-                        set_relay_state.delay(relay_id, True)
-                    else:
-                        set_relay_state.delay(relay_id, False)
-            except Exception as e:
-                logger.error(f"Error checking relay {relay_id}: {e}")
-        
-        return True
-    except Exception as e:
-        logger.error(f"Error checking schedules: {e}")
-        return False
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error checking schedules: {e}")
+            metrics.increment("errors")
+            return {"error": str(e)}
 
 def _should_be_on(relay) -> bool:
     """
     Determine if a relay should be ON based on its schedule and the current time.
-    """
-    # Get schedule details - handle both dict and Pydantic model
-    if isinstance(relay, dict):
-        schedule = relay.get("schedule", {})
-        if schedule is False:
-            return False
-        
-        schedule_enabled = schedule.get("enabled", False) if isinstance(schedule, dict) else False
-        on_time = schedule.get("on_time") if isinstance(schedule, dict) else getattr(schedule, "on_time", None) 
-        off_time = schedule.get("off_time") if isinstance(schedule, dict) else getattr(schedule, "off_time", None)
-        days_mask = schedule.get("days_mask", 0) if isinstance(schedule, dict) else getattr(schedule, "days_mask", 0)
-    else:  # Pydantic model
-        schedule = relay.schedule
-        if schedule is False:
-            return False
-        
-        schedule_enabled = getattr(schedule, "enabled", False)
-        on_time = getattr(schedule, "on_time", None)
-        off_time = getattr(schedule, "off_time", None)
-        days_mask = getattr(schedule, "days_mask", 0)
     
-    if not schedule_enabled:
-        return False
+    Args:
+        relay: Relay configuration object
         
+    Returns:
+        True if the relay should be ON, False otherwise
+    """
+    # Get schedule details - handle both dict and object models
+    schedule = relay.schedule
+    if not schedule or not getattr(schedule, 'enabled', False):
+        return False
+    
+    # Get schedule parameters
+    on_time = getattr(schedule, 'on_time', '00:00') or '00:00'
+    off_time = getattr(schedule, 'off_time', '23:59') or '23:59'
+    days_mask = getattr(schedule, 'days_mask', 0)
+    
     # Get current time and day of week
     now = datetime.now()
     current_time = now.strftime("%H:%M")
     
-    # Get current day name
+    # Get current day name and bit value
     day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
     current_day_name = day_names[now.weekday()]
-    
-    # Get day bit value from env settings
-    from app.core.env_settings import env
     day_bit = env.DAY_BITMASK.get(current_day_name, 0)
     
     # Check if today is scheduled
     if not (days_mask & day_bit):
         return False
-        
-    # Use defaults if not specified
-    on_time = on_time or "00:00"
-    off_time = off_time or "23:59"
     
     # Handle schedules that span midnight
     if on_time > off_time:
@@ -141,118 +146,189 @@ def _should_be_on(relay) -> bool:
         # Normal schedule (e.g., ON at 08:00, OFF at 17:00)
         return on_time <= current_time < off_time
 
-@app.task(bind=True, max_retries=2)
-def get_relay_state(self, relay_id: str) -> Dict[str, Any]:
+@app.task
+def get_relay_state(relay_id: str) -> Dict[str, Any]:
     """
-    Get the current state of a relay.
+    Get the current state of a single relay.
+    
+    Args:
+        relay_id: Identifier for the relay
+        
+    Returns:
+        Dict with relay state information
     """
-    try:
-        controller = RelayControl(relay_id)
-        state = controller.state
-        return {
-            "status": "success",
-            "relay_id": relay_id,
-            "state": state
-        }
-    except Exception as e:
-        logger.exception(f"Error getting state for relay {relay_id}: {e}")
-        self.retry(exc=e)
-        return {
-            "status": "error",
-            "message": str(e),
-            "relay_id": relay_id,
-            "state": None
-        }
+    with TaskMetrics(f"get_relay_state:{relay_id}") as metrics:
+        try:
+            controller = RelayControl(relay_id)
+            state = controller.state
+            
+            # Use our controller to get the relay name from config if available
+            name = None
+            try:
+                from app.core.config import config_manager
+                config = config_manager.get_config()
+                for relay in config.relays:
+                    if relay.id == relay_id:
+                        name = relay.name
+                        break
+            except Exception:
+                pass
+                
+            return {
+                "status": "success",
+                "relay_id": relay_id,
+                "name": name,
+                "state": state,
+                "state_text": "ON" if state == 1 else "OFF",
+                "timestamp": datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.exception(f"Error getting state for relay {relay_id}: {e}")
+            metrics.increment("errors")
+            return {
+                "status": "error",
+                "message": str(e),
+                "relay_id": relay_id,
+                "state": None
+            }
 
-@app.task(bind=True, max_retries=3)
-def set_relay_state(self, relay_id: str, state: bool) -> Dict[str, Any]:
+@app.task
+@run_task_with_new_loop
+async def set_relay_state(relay_id: str, state: bool) -> Dict[str, Any]:
     """
     Set a relay to ON or OFF.
-    """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     
-    try:
-        controller = RelayControl(relay_id)
+    Args:
+        relay_id: Identifier for the relay
+        state: True for ON, False for OFF
         
-        # Run the async controller operation in the event loop
-        if state:
-            result = loop.run_until_complete(controller.turn_on())
-        else:
-            result = loop.run_until_complete(controller.turn_off())
+    Returns:
+        Dict with operation result
+    """
+    with TaskMetrics(f"set_relay_state:{relay_id}") as metrics:
+        try:
+            # Get the controller
+            controller = RelayControl(relay_id)
             
-        return result
-    except Exception as e:
-        logger.exception(f"Error setting relay {relay_id} to {'ON' if state else 'OFF'}: {e}")
-        self.retry(exc=e)
-        return {
-            "status": "error",
-            "message": str(e),
-            "relay_id": relay_id,
-            "state": None
-        }
-    finally:
-        loop.close()
+            # Execute the appropriate operation
+            if state:
+                logger.info(f"Setting relay {relay_id} to ON")
+                result = await controller.turn_on()
+            else:
+                logger.info(f"Setting relay {relay_id} to OFF")
+                result = await controller.turn_off()
+                
+            # Add timestamp and verify success
+            result["timestamp"] = datetime.now().isoformat()
+            
+            if result.get("status") != "success":
+                metrics.increment("errors")
+                
+            return result
+        except Exception as e:
+            logger.exception(f"Error setting relay {relay_id} to {'ON' if state else 'OFF'}: {e}")
+            metrics.increment("errors")
+            return {
+                "status": "error",
+                "message": str(e),
+                "relay_id": relay_id,
+                "state": None
+            }
 
-@app.task(bind=True, max_retries=3)
-def pulse_relay(self, relay_id: str, duration: float) -> Dict[str, Any]:
+@app.task
+@run_task_with_new_loop
+async def pulse_relay(relay_id: str, duration: float) -> Dict[str, Any]:
     """
     Pulse a relay by toggling it, waiting for a duration, then toggling back.
-    """
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     
-    try:
-        controller = RelayControl(relay_id)
+    Args:
+        relay_id: Identifier for the relay
+        duration: Pulse duration in seconds
         
-        # Toggle the relay immediately
-        initial_result = loop.run_until_complete(controller.toggle())
-        initial_state = initial_result.get("state")
-        
-        # Schedule a separate task to toggle it back after the duration
-        # This will run in a separate process/thread via Celery
-        toggle_back_task = set_relay_state.apply_async(
-            args=[relay_id, initial_state == 0],  # Toggle back to original state
-            countdown=duration  # Schedule to run after duration seconds
-        )
-        
-        return {
-            "status": "success",
-            "relay_id": relay_id,
-            "message": f"Relay pulse initiated for {duration} seconds",
-            "state": initial_state,
-            "toggle_back_task_id": toggle_back_task.id
-        }
-    except Exception as e:
-        logger.exception(f"Error pulsing relay {relay_id}: {e}")
-        self.retry(exc=e)
-        return {
-            "status": "error",
-            "message": str(e),
-            "relay_id": relay_id,
-            "state": None
-        }
-    finally:
-        loop.close()
+    Returns:
+        Dict with operation result
+    """
+    with TaskMetrics(f"pulse_relay:{relay_id}") as metrics:
+        try:
+            # Get the controller
+            controller = RelayControl(relay_id)
+            
+            # Log the operation
+            logger.info(f"Pulsing relay {relay_id} for {duration}s")
+            
+            # Toggle the relay immediately
+            initial_result = await controller.toggle()
+            initial_state = initial_result.get("state")
+            
+            # Schedule a separate task to toggle it back after the duration
+            toggle_back_task = set_relay_state.apply_async(
+                args=[relay_id, initial_state == 0],  # Toggle back to original state
+                countdown=duration  # Schedule to run after duration seconds
+            )
+            
+            # Build result with more detail
+            result = {
+                "status": "success",
+                "relay_id": relay_id,
+                "message": f"Relay pulse initiated for {duration} seconds",
+                "initial_state": "ON" if initial_state == 1 else "OFF",
+                "return_state": "ON" if initial_state == 0 else "OFF",
+                "pulse_duration": duration,
+                "toggle_back_task_id": toggle_back_task.id,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            metrics.set("duration", duration)
+            return result
+            
+        except Exception as e:
+            logger.exception(f"Error pulsing relay {relay_id}: {e}")
+            metrics.increment("errors")
+            return {
+                "status": "error",
+                "message": str(e),
+                "relay_id": relay_id,
+                "state": None
+            }
 
-
-@app.task(bind=True, max_retries=2)
-def get_all_relay_states(self, relay_ids: List[str]) -> Dict[str, int]:
+@app.task
+def get_all_relay_states(relay_ids: List[str]) -> Dict[str, Any]:
     """
     Get the states of multiple relays at once.
-    """
-    try:
-        result = {}
-        for relay_id in relay_ids:
-            try:
-                controller = RelayControl(relay_id)
-                result[relay_id] = controller.state
-            except Exception as e:
-                logger.error(f"Error getting state for relay {relay_id}: {e}")
-                result[relay_id] = None
+    
+    Args:
+        relay_ids: List of relay identifiers
         
-        return result
-    except Exception as e:
-        logger.exception(f"Error getting multiple relay states: {e}")
-        self.retry(exc=e)
-        return {}
+    Returns:
+        Dict mapping relay IDs directly to their states (0 or 1)
+    """
+    with TaskMetrics("get_all_relay_states") as metrics:
+        try:
+            # Simple result format expected by the frontend
+            result = {}
+            errors = 0
+            
+            # Process each relay
+            for relay_id in relay_ids:
+                try:
+                    controller = RelayControl(relay_id)
+                    state = controller.state
+                    
+                    # Store ONLY the state value in the result
+                    result[relay_id] = state
+                    metrics.increment("processed")
+                except Exception as e:
+                    logger.error(f"Error getting state for relay {relay_id}: {e}")
+                    # Set state to 0 (OFF) on errors for frontend compatibility
+                    result[relay_id] = 0
+                    errors += 1
+                    metrics.increment("errors")
+            
+            metrics.set("errors", errors)
+            metrics.set("success", len(relay_ids) - errors)
+            
+            return result
+        except Exception as e:
+            logger.exception(f"Error getting multiple relay states: {e}")
+            metrics.increment("errors")
+            return {}  # Return empty dict on error
