@@ -30,7 +30,12 @@ class EnvSettings(BaseSettings):
 
     ADMIN_USERNAME: str = 'admin'
     HASHED_ADMIN_PASSWORD: str = ""
-
+    LOG_FILES: Dict[str, str] = {
+    "camera": "/var/log/camera.log",
+    "router": "/var/log/router.log"
+    }
+    CAMERA_LOG_FILE: str = LOG_FILES["camera"]
+    ROUTER_LOG_FILE: str = LOG_FILES["router"]
     # InfluxDB settings
     INFLUXDB_URL: str = 'http://influxdb:8086'
     ORG: str = 'RPi'

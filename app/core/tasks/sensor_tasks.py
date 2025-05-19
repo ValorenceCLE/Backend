@@ -2,7 +2,7 @@
 Sensor data collection and processing tasks.
 
 This module defines Celery tasks for reading sensor data, storing it in InfluxDB,
-updating WebSockets, and triggering rule evaluation.
+and triggering rule evaluation.
 """
 import asyncio
 import logging
@@ -20,7 +20,7 @@ async def read_all_sensors() -> Dict[str, Any]:
     Read all sensor data and process it.
     
     This task reads data from all configured sensors, stores it in InfluxDB,
-    updates WebSockets, and triggers rule evaluation.
+    and triggers rule evaluation.
     
     Returns:
         Dict with collection results and statistics
@@ -80,11 +80,6 @@ async def read_all_sensors() -> Dict[str, Any]:
                 if "data" in result and "source" in result:
                     from app.core.tasks.rule_tasks import evaluate_rules
                     evaluate_rules.delay(result["source"], result["data"])
-                    
-                # Update WebSocket if applicable
-                if "websocket_data" in result and "websocket_source" in result:
-                    from app.api.websocket import update_sensor_data
-                    update_sensor_data(result["websocket_source"], result["websocket_data"])
             
             # Write all points in a single batch
             if points_to_write:
@@ -150,21 +145,12 @@ async def _read_sensor(relay_id: str, address: int) -> Dict[str, Any]:
             "watts": data["power"]
         }
         
-        # WebSocket data
-        websocket_data = {
-            "timestamp": timestamp,
-            "relay_id": relay_id,
-            **data
-        }
-        
-        # Return all required data
+        # Return all required data (without WebSocket stuff)
         return {
             "success": True,
             "source": relay_id,
             "data": mapped_data,
-            "point": point,
-            "websocket_source": f"relay_{relay_id}",
-            "websocket_data": websocket_data
+            "point": point
         }
     except Exception as e:
         logger.error(f"Error reading sensor {relay_id}: {e}")
@@ -218,20 +204,12 @@ async def _read_environmental_sensor() -> Dict[str, Any]:
             "humidity": data["humidity"]
         }
         
-        # WebSocket data
-        websocket_data = {
-            "timestamp": timestamp,
-            **data
-        }
-        
-        # Return all required data
+        # Return all required data (without WebSocket stuff)
         return {
             "success": True,
             "source": "environmental",
             "data": mapped_data,
-            "point": point,
-            "websocket_source": "environmental",
-            "websocket_data": websocket_data
+            "point": point
         }
     except Exception as e:
         logger.error(f"Error reading environmental sensor: {e}")

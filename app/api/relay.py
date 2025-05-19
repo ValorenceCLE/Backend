@@ -1,16 +1,8 @@
 import logging
-import asyncio
-from fastapi import APIRouter, HTTPException, status, Depends, Query, WebSocket
-from app.utils.dependencies import internal_or_user_auth, verify_token_ws
+from fastapi import APIRouter, HTTPException, status, Depends
+from app.utils.dependencies import internal_or_user_auth
 from celery_app import app as celery_app
 from app.core.config import config_manager  # Updated import path
-from app.utils.websocket_utils import (
-    ws_manager,
-    websocket_connection,
-    safe_send_json,
-    safe_send_text,
-    safe_close
-)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -20,11 +12,6 @@ router = APIRouter(
     tags=["Relay API"],
     dependencies=[Depends(internal_or_user_auth)]
 )
-websocket_router = APIRouter(
-    prefix="/io", 
-    tags=["Relay WebSocket API"]
-)
-
 # Use the combined dependency for authentication.
 @router.post("/{relay_id}/state/on")
 async def turn_relay_on(relay_id: str) -> dict:
@@ -173,134 +160,4 @@ async def enabled_relay_states() -> dict:  # Removed Request parameter
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
-    
-@router.get("/rules/status")
-async def get_rules_status() -> dict:
-    """Get status of all rules via Celery task"""
-    try:
-        # Submit task to get rule status
-        task = celery_app.send_task(
-            'app.core.tasks.rule_tasks.get_rule_status',
-        )
-        
-        # Wait for result with timeout
-        result = task.get(timeout=10)
-        return result
-    except Exception as e:
-        logger.exception(f"Error getting rule status: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
 
-async def relay_states_polling_loop(websocket: WebSocket, enabled_only: bool, interval_seconds: float = 1.0):
-    """
-    Simple polling loop for relay states that sends updates at regular intervals.
-    
-    Args:
-        websocket: WebSocket connection
-        enabled_only: If True, only include enabled relays
-        interval_seconds: Polling interval in seconds
-    """
-    try:
-        while True:
-            try:
-                # Get fresh config in every loop in case relays were enabled/disabled
-                config = config_manager.get_config()
-                
-                if enabled_only:
-                    # Only get enabled relays
-                    relay_ids = [relay.id for relay in config.relays if relay.enabled]
-                else:
-                    # Get all relays
-                    relay_ids = [relay.id for relay in config.relays]
-                
-                # Skip if no relays to check
-                if not relay_ids:
-                    await asyncio.sleep(interval_seconds)
-                    continue
-                
-                # Get relay states with Celery task
-                task = celery_app.send_task(
-                    'app.core.tasks.relay_tasks.get_all_relay_states',
-                    args=[relay_ids],
-                )
-                states = task.get(timeout=min(interval_seconds * 0.8, 2.0))
-                
-                # Send states to the client
-                if states:
-                    if not await safe_send_json(websocket, states):
-                        # Connection closed
-                        break
-                
-            except Exception as e:
-                logger.error(f"Error in relay states polling loop: {e}")
-                # Continue the loop even if there was an error, but log it
-            
-            # Wait for next interval
-            await asyncio.sleep(interval_seconds)
-            
-    except Exception as e:
-        logger.exception(f"Unhandled error in relay states WebSocket: {e}")
-
-# WebSocket endpoint for all relay states - using the websocket_router
-@websocket_router.websocket("/relays/state/ws")
-async def all_relay_states_websocket(
-    websocket: WebSocket,
-    token: str = Query(None),
-    interval: float = Query(2.0, ge=0.5, le=10.0)
-):
-    """WebSocket endpoint to stream all relay states"""
-    connection_id = f"all_relay_states_{id(websocket)}"
-    
-    # Handle authentication manually
-    await websocket.accept()
-    
-    # Authenticate if token provided
-    if token:
-        try:
-            await verify_token_ws(token)
-        except HTTPException as e:
-            await websocket.send_text(f"Authentication failed: {e.detail}")
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-    
-    # Register connection
-    ws_manager.register_connection(connection_id, websocket)
-    
-    try:
-        logger.info(f"Started all relay states WebSocket with {interval}s interval")
-        await relay_states_polling_loop(websocket, enabled_only=False, interval_seconds=interval)
-    finally:
-        ws_manager.unregister_connection(connection_id, websocket)
-
-# WebSocket endpoint for enabled relay states - using the websocket_router
-@websocket_router.websocket("/relays/enabled/state/ws")
-async def enabled_relay_states_websocket(
-    websocket: WebSocket,
-    token: str = Query(None),
-    interval: float = Query(2.0, ge=0.5, le=10.0)
-):
-    """WebSocket endpoint to stream enabled relay states"""
-    connection_id = f"enabled_relay_states_{id(websocket)}"
-    
-    # Handle authentication manually
-    await websocket.accept()
-    
-    # Authenticate if token provided
-    if token:
-        try:
-            await verify_token_ws(token)
-        except HTTPException as e:
-            await websocket.send_text(f"Authentication failed: {e.detail}")
-            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
-            return
-    
-    # Register connection
-    ws_manager.register_connection(connection_id, websocket)
-    
-    try:
-        logger.info(f"Started enabled relay states WebSocket with {interval}s interval")
-        await relay_states_polling_loop(websocket, enabled_only=True, interval_seconds=interval)
-    finally:
-        ws_manager.unregister_connection(connection_id, websocket)

@@ -11,20 +11,10 @@ from app.utils.websocket_utils import (
     safe_send_text, 
     safe_close
 )
+from app.core.env_settings import env
 
 router = APIRouter(prefix="/sensor", tags=["sensors"])
 logger = logging.getLogger(__name__)
-
-# INA260 sensor configuration
-INA260_CONFIG = {
-    "relay_1": {"address": "0x44"},
-    "relay_2": {"address": "0x45"},
-    "relay_3": {"address": "0x46"},
-    "relay_4": {"address": "0x47"},
-    "relay_5": {"address": "0x48"},
-    "relay_6": {"address": "0x49"},
-    "main": {"address": "0x4B"},
-}
 
 class SensorFactory:
     """Factory for creating and caching sensor instances"""
@@ -32,7 +22,12 @@ class SensorFactory:
     @staticmethod
     def create_ina260_sensor(relay_id: str) -> Optional[INA260Sensor]:
         """Create or retrieve a cached INA260 sensor instance"""
-        if relay_id not in INA260_CONFIG:
+        sensor_config = next(
+            (sensor for sensor in env.INA260_SENSORS if sensor["relay_id"] == relay_id),
+            None
+        )
+        
+        if not sensor_config:
             logger.error(f"No configuration found for relay ID: {relay_id}")
             return None
             
@@ -41,10 +36,10 @@ class SensorFactory:
         
         if not sensor:
             try:
-                address = int(INA260_CONFIG[relay_id]["address"], 16)
+                address = sensor_config["address"]
                 sensor = INA260Sensor(address)
                 ws_manager.store_resource(cache_key, sensor)
-                logger.info(f"Created new INA260 sensor for {relay_id} at {INA260_CONFIG[relay_id]['address']}")
+                logger.info(f"Created new INA260 sensor for {relay_id} at {hex(address)}")
             except Exception as e:
                 logger.error(f"Failed to create INA260 sensor for {relay_id}: {e}")
                 return None
@@ -171,7 +166,7 @@ async def sensor_voltage(
             return False
             
         # Validate relay_id exists
-        if relay_id not in INA260_CONFIG:
+        if not any(sensor["relay_id"] == relay_id for sensor in env.INA260_SENSORS):
             await safe_send_text(ws, f"Unknown relay ID: {relay_id}")
             return False
             

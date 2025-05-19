@@ -6,7 +6,7 @@ and managing relay schedules based on configured time patterns.
 """
 import logging
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from celery_app import app
 from app.core.tasks.common import run_task_with_new_loop, TaskMetrics
 from app.services.controller import RelayControl
