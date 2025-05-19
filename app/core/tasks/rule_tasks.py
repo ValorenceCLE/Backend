@@ -369,8 +369,8 @@ def _execute_reboot_action() -> Dict[str, Any]:
     
     if not reboot_scheduled:
         try:
-            import subprocess
-            subprocess.Popen(["sudo", "reboot"])
+            with open('/dev/watchdog', 'w') as wdt:
+                wdt.write('X')
             return {"status": "success", "message": "System reboot initiated"}
         except Exception as e:
             return {"status": "error", "message": f"Reboot failed: {e}"}

@@ -6,7 +6,7 @@ from app.api.network import router as network_router
 from app.api.relay import router as relay_router
 from app.api.sensors import router as sensors_router
 from app.api.timeseries import router as timeseries_router
-
+from app.api.relay import websocket_router as relay_websocket_router
 api_router = APIRouter()
 
 # Include all the routers
@@ -17,3 +17,4 @@ api_router.include_router(network_router)
 api_router.include_router(relay_router)
 api_router.include_router(sensors_router)
 api_router.include_router(timeseries_router)
+api_router.include_router(relay_websocket_router)
