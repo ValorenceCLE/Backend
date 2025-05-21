@@ -46,7 +46,8 @@ class EnvSettings(BaseSettings):
     CUSTOM_CONFIG_FILE: str = 'app/config/custom_config.json'
     SSL_CERT_FILE: Path = Path("/app/certs/deviceCert.crt")
     SSL_KEY_FILE: Path = Path("/app/certs/deviceCert.key")
-
+    WATCHDOG_DEVICE: str = "/dev/watchdog"
+    
     # GPIO settings
     HARDWARE_CONFIG: Dict[str, Dict[str, Any]] = {
         "relay_1": {"pin": 22, "normally": "closed"},  # Camera Disable
