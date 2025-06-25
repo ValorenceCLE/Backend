@@ -4,5 +4,7 @@ __pycache__/
 secrets/
 Backend.code-workspace
 /certs
-celerybeat-schedule*
+celerybeat*
 custom_config.json
+celerybeat-schedule
+
